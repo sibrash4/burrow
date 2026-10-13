@@ -1,0 +1,26 @@
+→ DRY RUN MODE, No project artifacts will be removed
+
+Purge Project Artifacts
+
+✓ [DRY RUN] ~/dev/tracker-app/hc-dashboard/client/node_modules, 54.3MB
+✓ [DRY RUN] ~/dev/tracker-app/hc-dashboard/server/node_modules, 4.2MB
+✓ [DRY RUN] ~/dev/tracker-app/client/dist, 250KB
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/newsletter-site/.next (final removal check failed; re-run mo purge to review it again)
+✓ [DRY RUN] ~/dev/newsletter-site/.next, 57.3MB
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/tracker-app/hc-dashboard/client/node_modules (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/tracker-app/hc-dashboard/server/node_modules (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/tracker-app/client/dist (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/notes-tool/.venv (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/agent-playground/scripts/.venv (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/static-site/site/__pycache__ (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/static-site/site/scratch_out/__pycache__ (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/deck-builder/_work/__pycache__ (final removal check failed; re-run mo purge to review it again)
+◎ Skipped [cloud] ~/Library/CloudStorage/OneDrive-Personal/Archive/report-builder/_work/__pycache__ (final removal check failed; re-run mo purge to review it again)
+
+
+======================================================================
+Dry run incomplete - no changes made
+Would free approximately: 116.1MB | Items: 4 | Free: 780.21GB
+Some artifacts were skipped or could not be processed.
+======================================================================
+

@@ -1,0 +1,8 @@
+.build/
+build/
+*.app
+_research/
+.DS_Store
+.swiftpm/
+.impeccable/build/
+.impeccable/config.local.json

@@ -1,0 +1,6 @@
+→ DRY RUN MODE, No app files or settings will be modified
+
+[2J[H◎ Matched 1 app(s):
+1. Flux  5.8MB  |  Last: Today
+
+Proceed with uninstallation? [y/N] exit 1

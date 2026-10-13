@@ -1,0 +1,439 @@
+# Mole Cleanup Preview - 2026-10-13 00:01:31
+#
+# How to protect files:
+# 1. Run mo clean --whitelist and press Enter to save your selections
+# 2. Append paths below to ~/.config/mole/whitelist, one per line
+# A saved file replaces optional defaults; built-in safety protections still apply.
+#
+# Example:
+#   /Users/*/Library/Caches/com.example.app
+#
+
+
+=== User essentials ===
+/Users/test/Library/Caches/GeoServices  # 8KB
+/Users/test/Library/Caches/Google  # 632.8MB
+/Users/test/Library/Caches/Homebrew  # 48.5MB
+/Users/test/Library/Caches/INSTALLATION  # 1KB
+/Users/test/Library/Caches/JNA  # 0B
+/Users/test/Library/Caches/Mozilla  # 0B
+/Users/test/Library/Caches/RevenueCat  # 0B
+/Users/test/Library/Caches/RevenueCatFonts  # 0B
+/Users/test/Library/Caches/Updater  # 0B
+/Users/test/Library/Caches/Zed  # 0B
+/Users/test/Library/Caches/example-wiki.hashes.json  # 1KB
+/Users/test/Library/Caches/claude-cli-nodejs  # 5.6MB
+/Users/test/Library/Caches/com.example.app  # 4KB
+/Users/test/Library/Caches/com.logi.optionsplus.installer  # 0B
+/Users/test/Library/Caches/com.example.editor.ShipIt  # 8KB
+/Users/test/Library/Caches/com.wisp.app.sparkle  # 0B
+/Users/test/Library/Caches/editor-updater  # 516.1MB
+/Users/test/Library/Logs/AppAnalytics  # 0B
+/Users/test/Library/Logs/Assistant  # 0B
+/Users/test/Library/Logs/Baseband  # 0B
+/Users/test/Library/Logs/Claude-3p  # 1.6MB
+/Users/test/Library/Logs/Connections  # 29KB
+/Users/test/Library/Logs/CoreSimulator  # 12KB
+/Users/test/Library/Logs/CrashReporter  # 12KB
+/Users/test/Library/Logs/DiagnosticReports/CleanMyKeyboard-2026-10-11-221158.ips  # 17KB
+/Users/test/Library/Logs/DiagnosticReports/IceMelt-2026-10-11-214927.ips  # 20KB
+/Users/test/Library/Logs/DiagnosticReports/IceMelt-2026-10-12-181704.ips  # 25KB
+/Users/test/Library/Logs/DiagnosticReports/Retired  # 0B
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-214946.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-214953.000.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-214953.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-214957.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215036.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215039.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215105.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215106.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215146.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215151.000.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215151.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215219.000.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215219.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215221.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215224.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215946.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-215952.ips  # 26KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-11-220140.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-094702.000.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-100007.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-100111.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-100112.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-101314.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-101315.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102552.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102553.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102735.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102736.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102939.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-102942.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-103008.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-103010.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-103509.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-103510.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-105533.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-105534.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-105633.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-112047.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-113009.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-113011.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-115153.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-122114.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-124011.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-124554.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-135158.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-141344.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150010.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150012.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150034.000.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150034.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150536.000.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-150536.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-151311.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-151313.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-153018.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-173803.000.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-173803.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180015.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180016.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180345.000.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180345.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180732.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-180734.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-181349.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-181350.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233337.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233343.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233528.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233529.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233710.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-233714.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234017.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234018.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234058.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234059.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234546.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234548.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234809.ips  # 28KB
+/Users/test/Library/Logs/DiagnosticReports/ruby-2026-10-12-234810.ips  # 28KB
+/Users/test/Library/Logs/DiscRecording.log  # 1KB
+/Users/test/Library/Logs/Homebrew  # 0B
+/Users/test/Library/Logs/PhotosSearch.aapbz  # 1KB
+/Users/test/Library/Logs/PrivacyPreservingMeasurement  # 0B
+/Users/test/Library/Logs/SiriTTSService  # 0B
+/Users/test/Library/Logs/ZoomPhone  # 0B
+/Users/test/Library/Logs/connections-agent.log  # 76KB
+/Users/test/Library/Logs/printscout-ui  # 4KB
+/Users/test/Library/Logs/zoom.us  # 1.7MB
+/Users/test/.Trash/com.apple.numbers.sfl4  # 4KB
+/Users/test/.Trash/Firefox 22-56-10-726  # 63.3MB
+/Users/test/.Trash/group.net.whatsapp.WhatsAppSMB.shared  # 0B
+/Users/test/.Trash/com.apple.Keynote.KeynoteNotificationServiceExtension  # 0B
+/Users/test/.Trash/Pages Creator Studio.app  # 605.2MB
+/Users/test/.Trash/Pages 22-55-43-084.Pages  # 4KB
+/Users/test/.Trash/group.com.abhishek.Clocker  # 0B
+/Users/test/.Trash/com.apple.Numbers  # 0B
+/Users/test/.Trash/.DS_Store  # 29KB
+/Users/test/.Trash/24J875RH8J.com.surteesstudios.Bartender  # 0B
+/Users/test/.Trash/PagesNotificationServiceExtension 22-55-43-085.PagesNotificationServiceExtension  # 4KB
+/Users/test/.Trash/rustdesk-1.5.0-aarch64.dmg  # 29.9MB
+/Users/test/.Trash/group.net.whatsapp.WhatsAppSMB.shared 01-16-03-805.shared  # 4KB
+/Users/test/.Trash/group.net.whatsapp.family  # 0B
+/Users/test/.Trash/Obsidian-1.14.4.dmg  # 233.7MB
+/Users/test/.Trash/2BUA8C4S2C.com.agilebits  # 4KB
+/Users/test/.Trash/4D93786BRJ.com.nextdlp.reveal.agent.browser.safari  # 4KB
+/Users/test/.Trash/KeynoteNotificationServiceExtension 22-56-03-702.KeynoteNotificationServiceExtension  # 4KB
+/Users/test/.Trash/com.apple.iMovieApp  # 0B
+/Users/test/.Trash/com.firecore.infuse.sfl4  # 4KB
+/Users/test/.Trash/iMovie 22-55-52-973.iMovieApp  # 4KB
+/Users/test/.Trash/com.surteesstudios.Bartender.revenuecat 23-04-30-936.revenuecat  # 0B
+/Users/test/.Trash/com.apple.Numbers.E18C85A5-D34B-4C0B-883B-BFD91F79D175.json  # 4KB
+/Users/test/.Trash/com.abhishek.Clocker  # 0B
+/Users/test/.Trash/NumbersNotificationServiceExtension 22-55-14-804.NumbersNotificationServiceExtension  # 4KB
+/Users/test/.Trash/com.surteesstudios.Bartender.revenuecat  # 0B
+/Users/test/.Trash/iMovie.app  # 3.96GB
+/Users/test/.Trash/com.quip.Desktop.Quick-Look-Preview  # 0B
+/Users/test/.Trash/com.apple.Keynote  # 0B
+/Users/test/.Trash/ClockerWidget 22-50-43-015.ClockerWidget  # 4KB
+/Users/test/.Trash/group.net.whatsapp.family 01-16-03-806.family  # 4KB
+/Users/test/.Trash/Quip.app  # 86.8MB
+/Users/test/.Trash/group.net.whatsapp.WhatsApp.shared  # 0B
+/Users/test/.Trash/com.surteesstudios.Bartender.plist  # 4KB
+/Users/test/.Trash/com.tw93.MoleApp  # 4KB
+/Users/test/.Trash/org.mozilla.firefox.plist  # 4KB
+/Users/test/.Trash/Keynote Creator Studio.app  # 668.9MB
+/Users/test/.Trash/com.firecore.infuse  # 0B
+/Users/test/.Trash/group.com.facebook.family  # 0B
+/Users/test/.Trash/group.net.whatsapp.WhatsApp.private  # 0B
+/Users/test/.Trash/QuickLookProvider 22-55-22-382.Quick-Look-Preview  # 4KB
+/Users/test/.Trash/org.mozilla.firefox.plist 22-56-10-790.plist  # 4KB
+/Users/test/.Trash/com.tw93.MoleApp.plist  # 4KB
+/Users/test/.Trash/Mole 23-42-06-331  # 111KB
+/Users/test/.Trash/com.tw93.MoleApp 23-42-02-297.MoleApp  # 66KB
+/Users/test/.Trash/net.whatsapp.WhatsApp.ServiceExtension  # 0B
+/Users/test/.Trash/net.whatsapp.WhatsApp  # 0B
+/Users/test/.Trash/com.apple.Numbers.NumbersNotificationServiceExtension  # 0B
+/Users/test/.Trash/com.quip.Desktop.plist  # 4KB
+/Users/test/.Trash/mole  # 41KB
+/Users/test/.Trash/com.apple.Pages.PagesNotificationServiceExtension  # 0B
+/Users/test/.Trash/group.com.apple.iWork  # 0B
+/Users/test/.Trash/com.tw93.MoleApp 23-42-02-296.MoleApp  # 6.6MB
+/Users/test/.Trash/com.abhishek.Clocker.ClockerWidget  # 0B
+/Users/test/.Trash/com.apple.Pages  # 0B
+/Users/test/.Trash/com.surteesstudios.bartender.sfl4  # 4KB
+/Users/test/.Trash/Mole.app  # 53.7MB
+/Users/test/.Trash/Keynote 22-56-03-700.Keynote  # 4KB
+
+=== App caches ===
+/Users/test/Library/Suggestions/Harvesting  # 1.3MB
+/Users/test/Library/Suggestions/Metrics  # 0B
+/Users/test/Library/Suggestions/chatLengthEstimator.cmsketch  # 16KB
+/Users/test/Library/Suggestions/email-to-name.kvcache  # 1KB
+/Users/test/Library/Suggestions/journals  # 0B
+/Users/test/Library/Suggestions/phone-to-name.kvcache  # 1KB
+/Users/test/Library/Suggestions/privacyAwareLogging.ser  # 1KB
+/Users/test/Library/Suggestions/significant-pseudo-contacts.bf.bf2-head  # 50KB
+/Users/test/Library/Suggestions/significant-pseudo-contacts.bf.bf2-tail  # 50KB
+/Users/test/Library/Suggestions/suggestions-device-day-group  # 1KB
+/Users/test/Library/Messages/Caches/Previews/Attachments/04  # 623KB
+/Users/test/Library/Messages/Caches/Previews/Attachments/0a  # 700KB
+/Users/test/Library/Messages/Caches/Previews/Attachments/cd  # 49KB
+/Users/test/Library/Messages/Caches/Previews/Attachments/fb  # 221KB
+/Users/test/Library/Containers/com.apple.mediaanalysisd/Data/tmp/MediaCache  # 4KB
+/Users/test/Library/Containers/com.apple.mediaanalysisd/Data/tmp/Pissarro  # 7.5MB
+/Users/test/Library/Containers/com.apple.mediaanalysisd/Data/tmp/TemporaryItems  # 0B
+/Users/test/Library/Containers/com.apple.mediaanalysisd/Data/tmp/com.apple.mediaanalysis  # 0B
+/Users/test/Library/Containers/com.apple.wallpaper.extension.aerials/Data/tmp/CFNetworkDownload_DkEUSK.tmp  # 99.9MB
+/Users/test/Library/Containers/com.apple.wallpaper.extension.aerials/Data/tmp/TemporaryItems  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/016A5B7A-B999-4C56-85C4-29030A00FB07  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/01A23E81-52FE-4E4C-BC61-B4DAD06921B7  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/056F9D4F-6422-4421-9171-37E6180940B7  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/0F4DBD5D-2640-4FCE-85F0-040185355CEF  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/10F98A1E-3C80-4180-9BE3-6B06B5F8C431  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/1AA2FE0D-088E-4F0D-9D13-E40A10205ABD  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/21945EF6-0AF5-40B9-9E3A-32F4AF386725  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/2ADB7D66-0B88-4C5E-8DC8-D3BB86893458  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/2AE14E23-082C-4273-9D1C-99463C87F590  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/2D608918-8276-457B-9B72-C14FEB1876DF  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/324EEA18-B513-475A-AC4E-4D6C0505D818  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/33D1DFBA-959C-40AC-94A1-CEA252874DBB  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/3B46922A-5EB3-478C-B94A-1CB85050C41A  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/3CA126A0-E05E-4949-A9D7-B396A0B4EF60  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/41BED4C8-EE75-4F3D-B5BB-C75F141563F0  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/43092CC7-60E9-4855-85DF-742A3FA7BCE4  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/43394B77-53E4-4EE0-8D65-C34CBCDB6A58  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/477C5BAA-9476-48C4-9898-182E4298C825  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/4A83612A-7258-4982-BC01-A35F45871509  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/52644224-A000-496B-A109-73DCD7557E24  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/549D6888-9831-44ED-9D32-CA3B8AA272DB  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/57B5AC2C-6EEE-448B-ACA1-98DA8D2A4793  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/5DBF9B6A-16DA-4892-A732-C7F0C10490EF  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/68014FB5-C56F-4CDE-A527-8E165F81178F  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/6CDC4EB2-D2CA-4FC4-99AA-C4E5D5646604  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/6D38B844-A10B-43EA-BAE1-F996EE639965  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/7CE3A1B5-5ED6-4D55-9C00-89E5EA9002AB  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/85C081F2-DB47-48B2-A167-CB1A51375BA8  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/8A22AFB4-4760-4FFC-A5E2-8BA7F8E9B9A4  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/8CF736F6-6ACE-4BEC-B42D-8CA16BAB2A3B  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/8D256481-C6A0-4D46-BA18-1F581B620165  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/8D6FCCCA-F977-4916-A00C-ADB8D3B7DEC9  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/8E53CFD4-C45E-4421-8C24-C5E3C0038FF0  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/9F0B94DD-BD9B-420E-A1D3-8871C7D024FE  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/A2020DB4-2B21-4E9C-83A3-ABC07D5B04B7  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/A81EE8BC-23B9-4EF2-8A2C-145C02412A55  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/A8CCF67F-D911-4865-AD11-EC8745BE7110  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/ACB1494D-87F1-48A1-8C4A-E537E6DBB74B  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/AE4EABB6-4848-47A0-97A7-755FAFC5EA19  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/B6CEFBEE-9229-40B0-B7B0-C8E93129499E  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/B8C0716C-4A47-45D6-87E0-4BC7AC0CFAF0  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/BE39B6B2-CE52-4005-BDE2-C284FBC82A31  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/C95E53C0-B913-4251-B065-368F90DF1DFC  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/D0951D1B-365C-4D63-9F9D-54B41F15395A  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/D13D7F07-7644-4BB1-ABFA-41A70CA7B7C7  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/DEBA9F4C-2B8D-4A7A-A967-B9F80BBA8F9A  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/E1C3E9A0-EE3D-4A1D-85ED-2E3772E601B1  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/F2A2B376-9D7C-408C-A362-F49700F46613  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/F2FD919E-78DE-4323-8947-67A670AF8838  # 0B
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/F722F38B-4022-4169-8AB1-AFC618F934A0  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/F7DE56A1-5849-455E-A45D-BF331625AD9D  # 318KB
+/Users/test/Library/Containers/com.apple.geod/Data/tmp/TemporaryItems  # 0B
+/Users/test/Library/Caches/com.apple.helpd/CSHelpIndex.plist  # 27KB
+/Users/test/Library/Caches/com.apple.helpd/Generated  # 16.5MB
+/Users/test/Library/Caches/com.apple.helpd/HSTS.plist  # 1KB
+/Users/test/Library/Caches/com.apple.helpd/HelpCache.plist  # 34KB
+/Users/test/Library/Caches/com.apple.helpd/fsCachedData  # 14.0MB
+/Users/test/Library/Containers/com.apple.AppleMediaServicesUI.UtilityExtension/Data/tmp/C9ECD555-9914-48CE-88B8-E0F7EEB9E300  # 390KB
+/Users/test/Library/Containers/com.apple.AppleMediaServicesUI.UtilityExtension/Data/tmp/CDE91AE1-B437-40BF-B996-AA4B300B311A  # 390KB
+/Users/test/Library/Containers/com.apple.AppleMediaServicesUI.UtilityExtension/Data/tmp/bundle  # 8.0MB
+/Users/test/Library/Caches/com.apple.AppleMediaServices/Metrics  # 82KB
+/Users/test/Library/Caches/com.apple.parsecd/Cohorts  # 0B
+/Users/test/Library/Caches/com.apple.parsecd/CustomFeedback  # 0B
+/Users/test/Library/Caches/com.apple.parsecd/autofill_tld_whitelist_url  # 4.3MB
+/Users/test/Library/Caches/com.apple.parsecd/bag.plist  # 52KB
+/Users/test/Library/Caches/com.apple.parsecd/correction_dict_url  # 3.9MB
+/Users/test/Library/Caches/com.apple.parsecd/crowdsourcing_blacklist_url  # 1KB
+/Users/test/Library/Caches/com.apple.parsecd/crowdsourcing_whitelist_url  # 58KB
+/Users/test/Library/Caches/com.apple.parsecd/dictionary_resources_url  # 2KB
+/Users/test/Library/Caches/com.apple.parsecd/installed_app_whitelist_url  # 169KB
+/Users/test/Library/Caches/com.apple.parsecd/silhouette_config  # 1KB
+/Users/test/Library/Caches/com.apple.parsecd/silhouette_topic_mapping  # 1.0MB
+/Users/test/Library/Caches/com.apple.parsecd/silhouette_whitelisted_topics  # 55KB
+/Users/test/Library/Caches/com.apple.parsecd/spotlight_model_resources  # 4.0MB
+/Users/test/Library/Caches/com.apple.parsecd/spotlight_phrase_dictionary.map  # 3.4MB
+/Users/test/Library/Caches/com.apple.parsecd/spotlight_stopword.map  # 150KB
+/Users/test/Library/Group Containers/94KV3E626L.com.example.app/Logs/PersistMacOS.log  # 1.5MB
+/Users/test/Library/Group Containers/94KV3E626L.com.example.app/Logs/PersistUserService.log  # 48.6MB
+
+=== Browsers ===
+/Users/test/Library/Caches/Google/Chrome/Default  # 642.2MB, counted under /Users/test/Library/Caches/Google
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/1ef7013b2ca8e911b00da8bde04d774e76c0302d/1128211d-f4c8-4974-8ea7-784eeb6c92e3  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/1ef7013b2ca8e911b00da8bde04d774e76c0302d/dfea45fe-87fe-408d-9d9a-da763fa5af65  # 150.5MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/1ef7013b2ca8e911b00da8bde04d774e76c0302d/f9df477a-b2a0-449b-a716-d8ba4d1930ae  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/28da9c56fde4021055a681112c092453f74d8dd8/5aa18a77-2c70-42bb-8302-c6b62e349a67  # 12KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/3973adec-ee69-4b3d-a751-b81e9115751b  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/ce535a74-76be-459a-8423-abc19e601aa0  # 725KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/c15559b3-8bbe-43e6-ad58-9513f54c5aee  # 1.3MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/fb94dc2a-c15f-44cb-ac5f-bb77ac368f7c  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/f16c9c0a-650b-4ae6-91f7-20a18e7b9f9e  # 20KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/5b4556b2-3c4c-47f0-ab59-a9a8befb0593  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/b1660b08-b31c-4e87-a69b-81948cb74ffc  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/2a1c18365e83cb6e1347464058faa3d44e45a31c/81c949a1-2d47-438e-b2ad-cefdb43c7ffb  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/437024b04f35b409591145618883e12d8287e1a1/4edaaada-ac80-4e5b-99e2-c904e13f2387  # 1.2MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/b9bba2e83cdbabda355674fe56f186f837906e3a/b72df251-d41f-457f-a9fb-630d639fe9aa  # 12KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3a6faf96138604257eb4b8adcb261bd5e4ab0f95/aa805623-1c81-46e7-bcfa-97448a656ec2  # 4.7MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3a6faf96138604257eb4b8adcb261bd5e4ab0f95/12dbece7-9908-4921-a909-8fb71c75cf11  # 672KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3a6faf96138604257eb4b8adcb261bd5e4ab0f95/7f787917-7792-4799-8efd-d01d258c7f34  # 48.6MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3a6faf96138604257eb4b8adcb261bd5e4ab0f95/807fe5dc-512b-4d46-94c2-ac24080e6af0  # 238KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/adc3f2d1aa59960b03cc749db220a2af0810d1c3/2baed54c-0592-461a-926c-a3c226f8accf  # 29KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/f68a5986fdf8a9558c813cf9d755e61ede2a1f88/2922a801-2a78-4f6e-8195-224ff0491ebb  # 12KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/9fefc625cb06e6c54667dd7cd9a744af6b2a9d5c/5dfa8aee-2b12-46f3-a443-291eab49d4e2  # 56.1MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/9fefc625cb06e6c54667dd7cd9a744af6b2a9d5c/d7412333-5375-4dfb-ba88-de8a847d3696  # 251.5MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/9fefc625cb06e6c54667dd7cd9a744af6b2a9d5c/2b802412-511b-45ba-b627-408e7c516103  # 1.5MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/9fefc625cb06e6c54667dd7cd9a744af6b2a9d5c/8fc5f0df-1e60-49f2-a765-d470c044afad  # 50.9MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/9fefc625cb06e6c54667dd7cd9a744af6b2a9d5c/321f3183-7ec7-487f-8416-76c807d8de63  # 21.4MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3ba5f407c20424c8f24200949254facc822be34e/799b9e61-362a-4b09-ac63-ca1e5c6bc2a1  # 12.0MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/3ba5f407c20424c8f24200949254facc822be34e/2ce23560-c1d6-4b8d-8fe2-095579ae82ad  # 16KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/379f1cbab5b08b6fc9e08681e42d8be311441c88/6d9b1b40-756f-43ff-a541-c22a6dde8b3c  # 434KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/379f1cbab5b08b6fc9e08681e42d8be311441c88/dfe9e40a-ab10-4a68-961a-562a8db98247  # 47.5MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/8ed7fd277fd9f34f7a8dfa5ebf1ed2d2f1da4c75/682a26e9-3cc3-4f11-a7bc-530b1baf0306  # 6.9MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/8ed7fd277fd9f34f7a8dfa5ebf1ed2d2f1da4c75/db28586f-ef86-4599-bad4-65746c9d45fe  # 664KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/8ed7fd277fd9f34f7a8dfa5ebf1ed2d2f1da4c75/9a8148c5-34b2-41b0-9ad4-3258b5c90e94  # 120.7MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/8ed7fd277fd9f34f7a8dfa5ebf1ed2d2f1da4c75/bf66b851-0ea7-47c3-bbde-2bfdd8e72ef5  # 187.9MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/8ed7fd277fd9f34f7a8dfa5ebf1ed2d2f1da4c75/389fcff3-e922-48ae-ba66-f6a813a955c7  # 21.4MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/16600166ecf2d11757a37e170c4d74b59c43c62f/4aec87ae-a777-47b3-9d9a-3ad0d84fedb8  # 70KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/16600166ecf2d11757a37e170c4d74b59c43c62f/f13c8cdb-3f94-4abb-a60e-1e2ad90181c7  # 918KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/f7b336925bf4c71547fa2eec65b5cc4f70bee74e/8d5be3a1-1e76-49c0-a3e8-c3d551ca8ea2  # 4.6MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/951e7131-affc-43d8-9e34-f0648425b440  # 16KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/9644bd39-b04c-422c-bfdf-3d5cc49485b4  # 43.1MB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/e7378b4b-ccf2-4a47-850b-3cf29ccb47db  # 25KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/472a3b5b-470c-4d88-a346-197f87f42ab7  # 172KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/e3df5b63-05ed-45fc-9bb6-6f5abf88cdc0  # 12KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/355690543901cc08c45dface808d8446dd9e58ee/66d20b16-c116-4452-9a3c-d0fa3b1f4587  # 25KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/0b4725b0d32d30e48080091627234866cdac6cb8/d5791bc2-0f8a-495f-8af0-33986acc76a0  # 8KB
+/Users/test/Library/Application Support/Google/Chrome/Default/Service Worker/CacheStorage/77894b961f73e108469224a916a1218b1b451ec9/168ad281-4784-4476-8505-7b334ec92f4c  # 131KB
+
+=== Cloud & Office ===
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/2hu3hc0  # 1KB
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/34ijssj  # 364KB
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/6ab568bfd6a23  # 1KB
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/Content.MSO  # 94KB
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/Tempcma8bg  # 5KB
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/TemporaryItems  # 0B
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/WebKit  # 0B
+/Users/test/Library/Containers/com.microsoft.Word/Data/tmp/wefgallery  # 229KB
+
+=== Developer tools ===
+/Users/test/.npm/_logs/2026-10-13T06_42_22_642Z-debug-0.log  # 1KB
+/Users/test/.npm/_logs/2026-10-13T06_47_44_657Z-debug-0.log  # 1KB
+/Users/test/.npm/_logs/2026-10-13T06_53_05_965Z-debug-0.log  # 1KB
+/Users/test/.npm/_logs/2026-10-13T07_01_08_279Z-debug-0.log  # 1KB
+/Users/test/.cargo/registry/cache/index.crates.io-1949cf8c6b5b557f  # 51.1MB
+/Users/test/dev/newsletter-site/.next/cache/next-devtools-config.json  # 1KB
+/Users/test/dev/newsletter-site/.next/cache/swc  # 0B
+/Users/test/dev/newsletter-site/.next/cache/webpack  # 29.4MB
+/Users/test/dev/weekly-report/__pycache__  # 111KB
+/Users/test/dev/agent-playground/scripts/__pycache__  # 193KB
+/Users/test/Documents/Personal Stuff/Mi New Site/MI-New-Site/.next/cache/next-devtools-config.json  # 1KB
+/Users/test/Documents/Personal Stuff/Mi New Site/MI-New-Site/.next/cache/swc  # 0B
+/Users/test/Documents/Personal Stuff/Mi New Site/MI-New-Site/.next/cache/turbopack  # 90.6MB
+/Users/test/Documents/Personal Stuff/Mi New Site/MI-New-Site/.next/cache/webpack  # 54.3MB
+/Users/test/Library/Caches/org.swift.swiftpm/repositories  # 5.5MB
+/var/folders/2c/v1nc0d057rs_bds4194yxfym0000gq/C/clang/ModuleCache  # 220.4MB
+/Users/test/Library/Application Support/Claude/sentry/queue  # 4KB
+/Users/test/Library/Application Support/Claude/sentry/queue-purge-owed  # 0B
+/Users/test/Library/Application Support/Claude/sentry/scope_v3.json  # 14KB
+/Users/test/Library/Caches/Codex/Default/Cache/Cache_Data  # 152KB
+/Users/test/Library/Caches/Codex/Default/Cache/No_Vary_Search  # 8KB
+/Users/test/Library/Caches/Codex/Default/Code Cache/js  # 8KB
+/Users/test/Library/Caches/Codex/Default/Code Cache/wasm  # 8KB
+/Users/test/Library/Caches/Codex/Default/Partitions/codex-browser-app/Cache/Cache_Data  # 16KB
+/Users/test/Library/Caches/Codex/Default/Partitions/codex-browser-app/Cache/No_Vary_Search  # 8KB
+/Users/test/Library/Caches/Codex/Default/Partitions/codex-browser-app/Code Cache/js  # 8KB
+/Users/test/Library/Caches/Codex/Default/Partitions/codex-browser-app/Code Cache/wasm  # 8KB
+/Users/test/Library/Caches/Codex/codex-browser-app/Cache/Cache_Data  # 16KB
+/Users/test/Library/Caches/Codex/codex-browser-app/Cache/No_Vary_Search  # 8KB
+/Users/test/Library/Caches/Codex/codex-browser-app/Code Cache/js  # 8KB
+/Users/test/Library/Caches/Codex/codex-browser-app/Code Cache/wasm  # 8KB
+/Users/test/Library/Developer/CoreSimulator/Caches/Personalization  # 0B
+/Users/test/Library/Logs/CoreSimulator/CoreSimulator.log  # 11KB, counted under /Users/test/Library/Logs/CoreSimulator
+/Users/test/Library/Developer/Xcode/DerivedData/CompilationCache.noindex  # 29KB
+/Users/test/Library/Developer/Xcode/DerivedData/IceMelt-fnibnotvctwgvtcnonfzbykgotcu  # 107.3MB
+/Users/test/Library/Developer/Xcode/DerivedData/ModuleCache.noindex  # 204.5MB
+/Users/test/Library/Developer/Xcode/DerivedData/SDKExplicitPrecompiledModules  # 227.4MB
+/Users/test/Library/Developer/Xcode/DerivedData/SDKStatCaches.noindex  # 15.3MB
+/Users/test/Library/Application Support/Zed/node/cache/_cacache  # 293.3MB
+/Users/test/Library/Application Support/Zed/node/cache/_logs  # 139KB
+/Users/test/Library/Application Support/Zed/node/cache/_update-notifier-last-checked  # 0B
+/Users/test/Library/Caches/Homebrew/downloads/7398883a8fb094b6d71dc6f09594adfc39b2489d52c6a8a994bf9b5995da5d5e--mole-1.59.1.bottle_manifest.json  # 9KB, counted under /Users/test/Library/Caches/Homebrew
+/Users/test/Library/Caches/Homebrew/downloads/923b32a5eeba3734949284a27aa45b258b0f28d615a73de7a51af67c461c3640--mole--1.59.1.arm64_tahoe.bottle.tar.gz  # 4.1MB, counted under /Users/test/Library/Caches/Homebrew
+
+=== Apps & utilities ===
+/Users/test/Library/Application Support/Slack/Cache/Cache_Data  # 18.3MB
+/Users/test/Library/Application Support/Slack/Cache/No_Vary_Search  # 8KB
+/Users/test/Library/Caches/com.anthropic.claudefordesktop/fsCachedData  # 0B
+/Users/test/Library/Caches/com.mitchellh.ghostty/fsCachedData  # 20KB
+/Users/test/Library/Caches/com.mitchellh.ghostty/sentry  # 4KB
+
+=== Application Support ===
+/Users/test/Library/Application Support/1Password/Code Cache/js  # 8KB
+/Users/test/Library/Application Support/1Password/Code Cache/wasm  # 8KB
+/Users/test/Library/Application Support/1Password/Code Cache/electron-preload  # 8KB
+/Users/test/Library/Application Support/1Password/Cache/Cache_Data  # 0B
+/Users/test/Library/Application Support/1Password/Cache/No_Vary_Search  # 0B
+/Users/test/Library/Application Support/Slack/Code Cache/js  # 8KB
+/Users/test/Library/Application Support/Slack/Code Cache/wasm  # 8KB
+/Users/test/Library/Application Support/Slack/Code Cache/electron-preload  # 147KB
+/Users/test/Library/Application Support/Slack/GPUCache/data_1  # 270KB
+/Users/test/Library/Application Support/Slack/GPUCache/data_0  # 8KB
+/Users/test/Library/Application Support/Slack/GPUCache/index  # 263KB
+/Users/test/Library/Application Support/Slack/GPUCache/data_2  # 8KB
+/Users/test/Library/Application Support/Slack/GPUCache/data_3  # 8KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/data_1  # 270KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/f_000001  # 17KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/data_0  # 45KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/index  # 263KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/f_000005  # 17KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/f_000002  # 17KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/data_2  # 1.1MB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/f_000003  # 17KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/f_000004  # 17KB
+/Users/test/Library/Application Support/Slack/GraphiteDawnCache/data_3  # 4.2MB
+/Users/test/Library/Application Support/Slack/DawnGraphiteCache/data_1  # 270KB
+/Users/test/Library/Application Support/Slack/DawnGraphiteCache/data_0  # 8KB
+/Users/test/Library/Application Support/Slack/DawnGraphiteCache/index  # 263KB
+/Users/test/Library/Application Support/Slack/DawnGraphiteCache/data_2  # 8KB
+/Users/test/Library/Application Support/Slack/DawnGraphiteCache/data_3  # 8KB
+/Users/test/Library/Application Support/Slack/DawnWebGPUCache/data_1  # 270KB
+/Users/test/Library/Application Support/Slack/DawnWebGPUCache/data_0  # 8KB
+/Users/test/Library/Application Support/Slack/DawnWebGPUCache/index  # 263KB
+/Users/test/Library/Application Support/Slack/DawnWebGPUCache/data_2  # 8KB
+/Users/test/Library/Application Support/Slack/DawnWebGPUCache/data_3  # 8KB
+
+# ============================================
+# Summary
+# ============================================
+# Potential cleanup: 9.51GB
+# Items: 427
+# Categories: 7

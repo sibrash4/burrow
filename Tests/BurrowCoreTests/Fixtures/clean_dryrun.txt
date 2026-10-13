@@ -1,0 +1,105 @@
+
+Clean Your Mac
+
+Dry Run Mode, Preview only, no deletions
+
+◎ System caches need sudo, run sudo -v && mo clean --dry-run for full preview
+
+⚙ Apple Silicon | Free space: 780.28GB
+✓ Whitelist: 7 core + 1 custom patterns active
+  ↳ /Users/test/Library/Containers/com.microsoft.Excel/Data/tmp/*
+  ↳ /Users/test/Library/Caches/com.apple.FontRegistry*
+  ↳ /Users/test/Library/Caches/com.apple.spotlight*
+  ↳ /Users/test/Library/Caches/com.apple.Spotlight*
+  ↳ /Users/test/Library/Caches/CloudKit*
+  ↳ /Users/test/Library/Caches/pypoetry/virtualenvs*
+  ↳ /Users/test/Library/Caches/org.R-project.R/R/renv/*
+
+➤ User essentials
+  → User app cache · 17 items, 1.20GB dry
+  → User app logs · 103 items, 7.0MB dry
+  → Trash · would empty, 58 items
+
+➤ App caches
+  → Siri suggestions cache · 10 items, 1.4MB dry
+  → Messages preview attachment cache · 4 items, 1.6MB dry
+  → Media analysis temp files · 4 items, 7.6MB dry
+  → Wallpaper aerials temp files · 2 items, 99.9MB dry
+  → Geod temp files · 52 items, 9.9MB dry
+  → macOS Help system cache · 5 items, 30.6MB dry
+  → Apple Media Services temp files · 3 items, 8.7MB dry
+  → Apple Media Services cache · 82KB dry
+  → Parsecd cache · 15 items, 17.1MB dry
+  → Group Containers logs/caches · 50.1MB dry
+
+➤ Browsers
+  → Chrome cache · 642.2MB dry
+  → Chrome Service Worker, would clean 1.04GB, 0 protected
+
+➤ Cloud & Office
+  → Microsoft Word temp files · 9 items, 695KB dry
+
+➤ Developer tools
+  → npm cache · would clean
+  → npm logs · 4 items, 4KB dry
+  → Corepack cache · would clean
+  → pip cache · would clean
+  → uv cache · would clean
+  → Rust cargo cache · 51.1MB dry
+  → GitHub CLI cache · would clean
+  → Next.js build cache · 3 items, 29.4MB dry
+  → Python bytecode cache · weekly-report · 1 dirs, 111KB dry
+  → Python bytecode cache · scripts · 1 dirs, 193KB dry
+  → Next.js build cache · 4 items, 144.8MB dry
+  → Swift package manager library cache · 5.5MB dry
+  → Clang module cache · 220.4MB dry
+  → Claude sentry cache · 3 items, 18KB dry
+  → Codex Desktop Cache · 2 items, 160KB dry
+  → Codex Desktop Code Cache · 2 items, 16KB dry
+  → Codex Desktop Cache · 2 items, 25KB dry
+  → Codex Desktop Code Cache · 2 items, 16KB dry
+  → Codex Desktop Cache · 2 items, 25KB dry
+  → Codex Desktop Code Cache · 2 items, 16KB dry
+  → Simulator cache · 0B dry
+  → CoreSimulator logs · 11KB dry
+  → Xcode DerivedData · 5 projects, 554.5MB
+  → Zed npm cache · 3 items, 293.5MB dry
+  → Homebrew cache · 2 items, 4.1MB dry
+
+➤ Apps & utilities
+  → Slack cache · 2 items, 18.3MB dry
+  → Claude desktop cache · 0B dry
+  → Ghostty cache · 2 items, 25KB dry
+
+➤ Virtualization
+  ✓ Nothing to clean
+
+➤ Application Support
+  → Application Support logs/caches · 33.4MB dry
+
+➤ App leftovers
+  ✓ Nothing to clean
+
+➤ Apple Silicon updates
+  ✓ Nothing to clean
+
+➤ Device backups & firmware
+  ✓ Nothing to clean
+
+➤ Time Machine
+  ✓ Nothing to clean
+
+➤ Large files
+  ⊙ Mail data · 1.08GB · ~/Library/Mail
+
+➤ Project artifacts
+  ⊙ Build artifacts · 9 dirs, 98.3MB+ · mo purge
+
+
+======================================================================
+Dry run complete - no changes made
+Potential space: 9.51GB | Items: 427 | Categories: 7
+Detailed file list: /Users/test/.config/mole/clean-list.txt
+Use mo clean --whitelist to add protection rules
+======================================================================
+

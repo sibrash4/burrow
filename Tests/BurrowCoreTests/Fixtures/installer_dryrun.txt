@@ -1,0 +1,26 @@
+→ DRY RUN MODE, No installer files will be removed
+
+
+[HSelect Installers to Remove [1/23] , 0B, 0 selected
+[2K
+[2K➤ ○ 1Password.zip                              21.8MB | Downloads 
+[2K  ○ AppCleaner_3.7.zip                          4.1MB | Downloads 
+[2K  ○ Bartender 6.dmg                            54.7MB | Downloads 
+[2K  ○ Bartender 7.dmg                            60.8MB | Downloads 
+[2K  ○ BetterDisplay-v5.1.1.dmg                   29.2MB | Downloads 
+[2K  ○ FSNotes_7.3.4.zip                          16.8MB | Downloads 
+[2K  ○ Flux.zip                                    2.1MB | Downloads 
+[2K  ○ Ghostty.dmg                                33.8MB | Downloads 
+[2K  ○ Handy_0.9.8_aarch64.dmg                    19.6MB | Downloads 
+[2K  ○ Ice.zip                                     3.5MB | Downloads 
+[2K  ○ Latest.dmg                                  4.0MB | Downloads 
+[2K  ○ Mac - Example Preview Installer.dmg         1.4MB | Downloads 
+[2K  ○ Mole.dmg                                   27.3MB | Downloads 
+[2K  ○ Numi.dmg                                   13.8MB | Downloads 
+[2K  ○ Notes.dmg                                 72.0MB | Downloads 
+[2K  ○ Rectangle1.100.dmg                          4.3MB | Downloads 
+[2K  ○ Rectangle2.0.2.dmg                          4.7MB | Downloads 
+[2K  ○ Shottr-1.9.2.dmg                            2.5MB | Downloads 
+[2K
+[2K↑↓  |  Space Select  |  Enter Confirm  |  A All  |  I Invert  |  Q Quit
+
