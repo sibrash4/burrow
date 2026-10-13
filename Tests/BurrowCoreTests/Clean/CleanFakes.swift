@@ -116,6 +116,7 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
     func waitForExit(timeout: TimeInterval) async throws -> Int32 {
         let done: Bool = lock.withLock {
             if exitsBeforeSend && revealed >= chunks.count { exited = true; return true }
+            if exited { return true }
             if revealed < chunks.count { revealed += 1; return false }
             if !neverExits { exited = true }
             return !neverExits
@@ -125,7 +126,8 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
         throw BurrowError.timeout("still running")
     }
 
-    func terminate() { lock.withLock { _terminated = true } }
+    /// A process that never exits on its own still goes away once it is terminated, like a real one after SIGKILL.
+    func terminate() { lock.withLock { _terminated = true; if neverExits { exited = true } } }
 }
 
 final class CleanFakeLauncher: InteractiveLaunching, @unchecked Sendable {

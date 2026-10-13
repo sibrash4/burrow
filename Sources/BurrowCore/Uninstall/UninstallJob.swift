@@ -144,14 +144,22 @@ public struct UninstallJob: MoleJob {
     // MARK: Run
 
     public func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
-        AsyncThrowingStream { continuation in
+        RunTeardown.shared.begin(kind)
+        return AsyncThrowingStream { continuation in
             let holder = SessionHolder()
             let task = Task {
+                var settled: RunResult?
+                defer { RunTeardown.shared.end(kind, result: settled) }
                 do {
                     try await execute(selection: selection, scan: scan, holder: holder, continuation: continuation)
                     continuation.finish()
                 } catch {
-                    holder.terminate()
+                    if RunTeardown.isStop(error) {
+                        // Mole is stopped and waited for; what it printed so far is kept for the stopped screen.
+                        settled = await holder.stopAndReport()
+                    } else {
+                        holder.terminate()
+                    }
                     continuation.finish(throwing: error)
                 }
             }
@@ -330,5 +338,15 @@ private final class SessionHolder: @unchecked Sendable {
     func terminate() {
         lock.lock(); let current = session; lock.unlock()
         current?.terminate()
+    }
+
+    /// Stops Mole, waits for it to exit, and reports what it printed. nil if Mole was never started.
+    func stopAndReport() async -> RunResult? {
+        guard let current = lock.withLock({ session }) else { return nil }
+        await current.terminateAndWait()
+        let log = current.transcript()
+        let summary = UninstallOutput.summary(in: log)
+        return RunResult(freedBytes: summary.freedBytes, itemCount: summary.apps,
+                         problems: summary.problems + ["Stopped before Mole finished."], exitCode: -1, log: log)
     }
 }

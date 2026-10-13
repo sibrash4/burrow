@@ -11,9 +11,8 @@ enum AppWiring {
         //    whitelist half-edited, put the user's own file back first.
         let recovery = recoverWhitelist()
 
-        // 2. Is Mole there, and is it the version Burrow was built for?
+        // 2. Is Mole there? Checked after the window is up (AppModel.checkMole), never on the main thread here.
         let locator = MoleLocator()
-        let status = moleStatus(locator)
 
         // 3. Real jobs.
         let runner = ProcessRunner(locator: locator)
@@ -30,11 +29,9 @@ enum AppWiring {
 
         let model = AppModel(
             jobs: jobs,
-            moleStatus: status,
-            // "Always keep" is a Mole whitelist entry, so it only exists for Clean rows.
-            alwaysKeep: { item in
-                do { try clean.alwaysKeep(item) } catch { NSLog("Burrow: could not save always-keep for %@: %@", item.title, "\(error)") }
-            },
+            moleStatus: .checking,
+            // "Always keep" is a Mole whitelist entry, so it only exists for Clean rows. Errors reach the UI.
+            alwaysKeep: { item in try clean.alwaysKeep(item) },
             previewLeftovers: { item in
                 try await uninstall.previewLeftovers(for: item).map(Leftover.init(previewLine:))
             },

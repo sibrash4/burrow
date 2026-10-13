@@ -37,7 +37,7 @@ public struct PurgeJob: MoleJob {
             args: runArguments, label: "Removing build folders",
             checkConfirm: { PurgeParser.checkConfirm(screen: $0, wanted: wanted) },
             summarize: { PurgeParser.summarize(log: $0, exitCode: $1) })
-        return MenuJobRun.stream(spec: spec, wanted: wanted, launcher: launcher, driver: driver,
+        return MenuJobRun.stream(kind: kind, spec: spec, wanted: wanted, launcher: launcher, driver: driver,
                                  idleResult: RunResult(itemCount: 0, exitCode: 0, log: ""))
     }
 }

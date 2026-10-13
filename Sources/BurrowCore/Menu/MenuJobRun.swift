@@ -56,14 +56,22 @@ private final class SessionBox: @unchecked Sendable {
     private var session: InteractiveSession?
     func set(_ s: InteractiveSession) { lock.lock(); session = s; lock.unlock() }
     func terminate() { lock.lock(); let s = session; lock.unlock(); s?.terminate() }
+
+    func terminateAndWait() async {
+        await current()?.terminateAndWait()
+    }
+
+    private func current() -> InteractiveSession? { lock.withLock { session } }
 }
 
 enum MenuJobRun {
-    static func stream(spec: MenuRunSpec, wanted: [String], launcher: InteractiveLaunching, driver: MoleMenuDriver,
+    static func stream(kind: JobKind, spec: MenuRunSpec, wanted: [String], launcher: InteractiveLaunching, driver: MoleMenuDriver,
                        idleResult: RunResult) -> AsyncThrowingStream<JobEvent, Error> {
-        AsyncThrowingStream { continuation in
+        RunTeardown.shared.begin(kind)
+        return AsyncThrowingStream { continuation in
             let box = SessionBox()
             let task = Task {
+                defer { RunTeardown.shared.end(kind) }
                 do {
                     guard !wanted.isEmpty else {
                         continuation.yield(.finished(idleResult))
@@ -118,7 +126,7 @@ enum MenuJobRun {
                     continuation.yield(.finished(spec.summarize(log, exitCode ?? -1)))
                     continuation.finish()
                 } catch {
-                    box.terminate()
+                    if RunTeardown.isStop(error) { await box.terminateAndWait() } else { box.terminate() }
                     continuation.finish(throwing: error)
                 }
             }

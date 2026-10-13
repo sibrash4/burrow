@@ -73,8 +73,10 @@ public struct AILeftoversJob: MoleJob {
     // MARK: Run (removes only what is ticked and still qualifies)
 
     public func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
-        AsyncThrowingStream { continuation in
+        RunTeardown.shared.begin(kind)
+        return AsyncThrowingStream { continuation in
             let task = Task {
+                defer { RunTeardown.shared.end(kind) }
                 do {
                     let result = try await execute(selection: selection, scan: scan, emit: { continuation.yield($0) })
                     continuation.yield(.finished(result))

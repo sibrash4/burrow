@@ -4,19 +4,29 @@ import BurrowCore
 struct RunningView: View {
     var status: String
     var log: [String]
-    var onCancel: () -> Void
+    var logRevision: Int
+    /// nil: Mole gives no byte-level progress, so the bar is indeterminate.
+    var progress: Double?
+    var stopping: Bool
+    var onStop: () -> Void
     @State private var showLog = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(status.isEmpty ? "Working" : status).font(.title3)
-            ProgressView().progressViewStyle(.linear)
+            if let progress {
+                ProgressView(value: progress)
+            } else {
+                ProgressView().progressViewStyle(.linear)
+            }
             DisclosureGroup("Details", isExpanded: $showLog) {
-                LogView(lines: log).frame(height: 260)
+                LogView(lines: log, revision: logRevision).frame(height: 260)
             }
             HStack {
                 Spacer()
-                Button("Cancel", action: onCancel).keyboardShortcut(.cancelAction)
+                Button(stopping ? "Stopping\u{2026}" : "Stop", action: onStop)
+                    .keyboardShortcut(.cancelAction)
+                    .disabled(stopping)
             }
         }
         .frame(maxWidth: 560)
@@ -26,6 +36,9 @@ struct RunningView: View {
 
 struct LogView: View {
     var lines: [String]
+    /// Scrolls to the newest line whenever this changes. Pass a counter that keeps growing: `lines.count`
+    /// stops changing once the log is capped.
+    var revision = 0
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -42,7 +55,7 @@ struct LogView: View {
                 .padding(10)
             }
             .background(.quaternary.opacity(0.5), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
-            .onChange(of: lines.count) { proxy.scrollTo("end") }
+            .onChange(of: revision) { proxy.scrollTo("end") }
         }
         .accessibilityLabel("Live log")
     }
@@ -113,13 +126,23 @@ struct DoneView: View {
 struct FailedView: View {
     var text: String
     var cancelled: Bool
+    /// What the run got done before it stopped or failed, when Mole reported it.
+    var result: RunResult?
     var onRetry: () -> Void
 
     var body: some View {
         ContentUnavailableView {
             Label(cancelled ? "Stopped" : "Couldn't finish", systemImage: "exclamationmark.circle")
         } description: {
-            Text(text)
+            VStack(spacing: 6) {
+                Text(text)
+                if let freed = result?.freedBytes, freed > 0 {
+                    Text(cancelled
+                         ? "\(ByteSize.format(freed)) was freed before you stopped. Anything Mole had not reached is still there."
+                         : "\(ByteSize.format(freed)) was freed before Mole stopped.")
+                        .monospacedDigit()
+                }
+            }
         } actions: {
             Button("Retry", action: onRetry)
                 .buttonStyle(.borderedProminent)

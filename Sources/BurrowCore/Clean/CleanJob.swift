@@ -120,10 +120,15 @@ public struct CleanJob: MoleJob {
     // MARK: Run
 
     public func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
-        AsyncThrowingStream { continuation in
+        RunTeardown.shared.begin(kind)
+        return AsyncThrowingStream { continuation in
             let task = Task {
+                var settled: RunResult?
+                // Runs after the whitelist is back in place, so anyone waiting on teardown sees the final state.
+                defer { RunTeardown.shared.end(kind, result: settled) }
                 do {
                     let result = try await execute(selection: selection, scan: scan) { continuation.yield($0) }
+                    settled = result
                     continuation.yield(.finished(result))
                     continuation.finish()
                 } catch is CancellationError {
@@ -337,12 +342,16 @@ public struct CleanJob: MoleJob {
                 }
                 if Date() > deadline { throw BurrowError.timeout("mo clean") }
             }
+        } catch is CancellationError {
+            // Stop was pressed. Mole is stopped and waited for, and what it printed so far is reported.
+            await session.terminateAndWait()
+            return Self.partialResult(transcript: session.transcript())
         } catch {
             session.terminate()
             throw error
         }
 
-        if drainSeconds > 0 { try await Task.sleep(nanoseconds: UInt64(drainSeconds * 1_000_000_000)) }
+        if drainSeconds > 0 { try? await Task.sleep(nanoseconds: UInt64(drainSeconds * 1_000_000_000)) }
         let transcript = session.transcript()
         let summary = CleanRunParser.parse(transcript)
         return RunResult(
@@ -350,6 +359,18 @@ public struct CleanJob: MoleJob {
             itemCount: summary.itemCount,
             problems: summary.problems,
             exitCode: exitCode ?? -1,
+            log: transcript
+        )
+    }
+
+    /// A run that was stopped early: whatever summary Mole printed, plus a line saying it was stopped.
+    static func partialResult(transcript: String) -> RunResult {
+        let summary = CleanRunParser.parse(transcript)
+        return RunResult(
+            freedBytes: summary.freedBytes,
+            itemCount: summary.itemCount,
+            problems: summary.problems + ["Stopped before Mole finished."],
+            exitCode: -1,
             log: transcript
         )
     }
