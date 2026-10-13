@@ -63,8 +63,17 @@ final class AILeftoversShellTests: XCTestCase {
     func testProcessThatSurvivesSigtermDoesNotHangTheCaller() async throws {
         // The shell ignores SIGTERM and its child keeps the output pipe open, so only the hard deadline can end the call.
         let started = Date()
+        let dir = try makeTempDirectory()
+        let pidFile = dir.appendingPathComponent("sleeper.pid")
+        // The sleeper outlives the shell (SIGKILL cannot reach it), so the test must end it itself.
+        defer {
+            if let text = try? String(contentsOf: pidFile, encoding: .utf8), let pid = pid_t(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                kill(pid, SIGKILL)
+            }
+            try? FileManager.default.removeItem(at: dir)
+        }
         do {
-            _ = try await ProcessShell().run("/bin/sh", ["-c", "trap '' TERM; sleep 30"], timeout: 0.5)
+            _ = try await ProcessShell().run("/bin/sh", ["-c", "trap '' TERM; sleep 30 & echo $! > '\(pidFile.path)'; wait"], timeout: 0.5)
             XCTFail("expected the call to give up")
         } catch let error as ShellError {
             XCTAssertEqual(error, .hung("/bin/sh"))

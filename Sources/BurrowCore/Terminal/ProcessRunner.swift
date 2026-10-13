@@ -1,4 +1,7 @@
 import Foundation
+import os
+
+private let log = Logger(subsystem: "app.burrow.core", category: "ProcessRunner")
 
 /// Runs Mole (or any executable, for tests) without a terminal. stdin is /dev/null.
 public struct ProcessRunner: CommandRunning {
@@ -9,16 +12,22 @@ public struct ProcessRunner: CommandRunning {
 
     private let source: Source
     private let baseEnvironment: [String: String]
+    private let eofGrace: TimeInterval
 
-    public init(locator: MoleLocator = MoleLocator()) {
+    /// `eofGrace` is how long a call keeps waiting for the output pipe to close after the child has exited. A
+    /// descendant that outlives the child and keeps the pipe open (a daemon, an escapee) would otherwise hold the call
+    /// open until it exits. When the grace passes, the call returns what it has read and logs it.
+    public init(locator: MoleLocator = MoleLocator(), eofGrace: TimeInterval = 2) {
         source = .locate(locator)
         baseEnvironment = ProcessInfo.processInfo.environment
+        self.eofGrace = eofGrace
     }
 
     /// Runs `executable` instead of `mo`. Intended for tests.
-    public init(executable: URL, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) {
+    public init(executable: URL, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment, eofGrace: TimeInterval = 2) {
         source = .fixed(executable)
         self.baseEnvironment = baseEnvironment
+        self.eofGrace = eofGrace
     }
 
     public func run(_ args: [String], environment: [String: String] = [:]) async throws -> (exitCode: Int32, output: String) {
@@ -32,7 +41,7 @@ public struct ProcessRunner: CommandRunning {
         var overrides = environment
         if overrides["NO_COLOR"] == nil { overrides["NO_COLOR"] = "1" }
         let env = ProcessEnvironment.make(base: baseEnvironment, overrides: overrides)
-        let job = RunningProcess(executable: executable, args: args, environment: env)
+        let job = RunningProcess(executable: executable, args: args, environment: env, eofGrace: eofGrace)
 
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -61,15 +70,17 @@ private final class RunningProcess: @unchecked Sendable {
     private let executable: URL
     private let args: [String]
     private let environment: [String: String]
+    private let eofGrace: TimeInterval
     private let lock = NSLock()
     private var cancelled = false
     /// The group id, which is also the child's pid. Zero until the child has been spawned.
     private var group: pid_t = 0
 
-    init(executable: URL, args: [String], environment: [String: String]) {
+    init(executable: URL, args: [String], environment: [String: String], eofGrace: TimeInterval) {
         self.executable = executable
         self.args = args
         self.environment = environment
+        self.eofGrace = eofGrace
     }
 
     var wasCancelled: Bool {
@@ -77,12 +88,12 @@ private final class RunningProcess: @unchecked Sendable {
         return cancelled
     }
 
-    /// Blocks the calling thread until the process exits and its output is fully read.
+    /// Blocks the calling thread until the process exits and its output is read. Output ends at end-of-file, or
+    /// `eofGrace` seconds after the child exits if a descendant still holds the pipe open.
     func runToCompletion() throws -> (Int32, Data) {
-        var fds: [Int32] = [0, 0]
-        guard pipe(&fds) == 0 else { throw Self.failure(errno) }
-        let readEnd = fds[0], writeEnd = fds[1]
-        let input = open("/dev/null", O_RDONLY)
+        // Close-on-exec on both ends and on /dev/null: only the explicit dup2s in spawn() reach the child.
+        let (readEnd, writeEnd) = try FileDescriptors.makeCloexecPipe()
+        let input = FileDescriptors.open("/dev/null", O_RDONLY)
         guard input >= 0 else {
             let code = errno
             close(readEnd)
@@ -102,7 +113,7 @@ private final class RunningProcess: @unchecked Sendable {
         if error == 0 { group = pid }
         lock.unlock()
 
-        // The parent keeps only the read end. Reading reaches EOF once every process in the group has closed its output.
+        // The parent keeps only the read end. Reading reaches EOF once every process holding the output has closed it.
         close(input)
         close(writeEnd)
         guard error == 0 else {
@@ -110,18 +121,23 @@ private final class RunningProcess: @unchecked Sendable {
             throw Self.failure(error)
         }
 
-        let data = drain(readEnd)
-        return (reap(pid), data)
+        let (data, exitCode) = drain(readEnd, child: pid)
+        return (exitCode ?? reap(pid), data)
     }
 
-    /// Reads until the pipe reaches EOF, which happens once every process in the group has closed its output.
+    /// Reads until the pipe reaches EOF, which happens once every process holding the output has closed it. The child
+    /// is reaped as soon as it exits; from then on EOF gets `eofGrace` seconds, so a descendant that kept the pipe
+    /// (see `eofGrace` on ProcessRunner) cannot hold the call open.
     /// After cancellation it gives up waiting for EOF after a short grace period, so a helper that left the group
     /// (setsid, daemonised) cannot hold the cancelled call open. Closes `fd` in every case.
-    private func drain(_ fd: Int32) -> Data {
+    /// Returns the exit code if the child was reaped here, nil if the caller still has to wait for it.
+    private func drain(_ fd: Int32, child: pid_t) -> (Data, Int32?) {
         defer { close(fd) }
         var data = Data()
         var buffer = [UInt8](repeating: 0, count: 16 * 1024)
         var cancelledAt: Date?
+        var exitCode: Int32?
+        var exitedAt: Date?
         while true {
             // Checked on every pass, so a helper that keeps writing cannot hold a cancelled call open either.
             if wasCancelled {
@@ -129,13 +145,21 @@ private final class RunningProcess: @unchecked Sendable {
                 cancelledAt = start
                 if Date().timeIntervalSince(start) > 3 { break }
             }
+            if exitCode == nil, let code = reapIfExited(child) {
+                exitCode = code
+                exitedAt = Date()
+            }
+            if let exitedAt, Date().timeIntervalSince(exitedAt) > eofGrace {
+                log.warning("pid \(child) exited \(self.eofGrace, format: .fixed(precision: 1)) s ago but the output pipe is still open; a descendant holds it. Returning \(data.count) bytes without waiting for end-of-file.")
+                break
+            }
             var poller = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
             guard poll(&poller, 1, 50) > 0 else { continue }
             let count = read(fd, &buffer, buffer.count)
             if count > 0 { data.append(buffer, count: count); continue }
             if count == 0 || (errno != EINTR && errno != EAGAIN) { break }
         }
-        return data
+        return (data, exitCode)
     }
 
     func cancel() {
@@ -189,6 +213,19 @@ private final class RunningProcess: @unchecked Sendable {
     private func reap(_ pid: pid_t) -> Int32 {
         var status: Int32 = 0
         while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
+        return Self.exitCode(fromStatus: status)
+    }
+
+    /// The exit code if the child has exited (and is now reaped), nil while it is still running.
+    private func reapIfExited(_ pid: pid_t) -> Int32? {
+        var status: Int32 = 0
+        let result = waitpid(pid, &status, WNOHANG)
+        if result == pid { return Self.exitCode(fromStatus: status) }
+        if result < 0 && errno != EINTR { return -1 } // already reaped elsewhere: stop polling
+        return nil
+    }
+
+    private static func exitCode(fromStatus status: Int32) -> Int32 {
         let signal = status & 0x7F
         return signal == 0 ? (status >> 8) & 0xFF : signal
     }

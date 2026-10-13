@@ -14,7 +14,8 @@ final class ScriptedMoleTests: XCTestCase {
 
     override func tearDownWithError() throws {
         unsetenv("BURROW_SCRIPT_PIDFILE")
-        if let pid = scriptPID { kill(pid, SIGKILL) }
+        // The script leads its own session, so its pid is also its group: this ends `sleep 120` and other helpers too.
+        if let pid = scriptPID { kill(-pid, SIGKILL); kill(pid, SIGKILL) }
         try? FileManager.default.removeItem(at: directory)
     }
 

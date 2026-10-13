@@ -29,14 +29,15 @@ public final class PTYSession: InteractiveSession, @unchecked Sendable {
         guard FileManager.default.isExecutableFile(atPath: executable.path) else { throw BurrowError.moleNotFound }
         let columns = max(1, columns), rows = max(1, rows)
 
-        let master = posix_openpt(O_RDWR | O_NOCTTY)
+        // Close-on-exec from creation, so no child started anywhere in the process can inherit the master or the slave.
+        let master = posix_openpt(O_RDWR | O_NOCTTY | O_CLOEXEC)
         guard master >= 0 else { throw failure("posix_openpt", errno) }
+        FileDescriptors.setCloexec(master)
         guard grantpt(master) == 0, unlockpt(master) == 0 else {
             let code = errno
             close(master)
             throw failure("grantpt/unlockpt", code)
         }
-        _ = fcntl(master, F_SETFD, FD_CLOEXEC)
 
         var nameBuffer = [CChar](repeating: 0, count: 128)
         guard ioctl(master, TIOCPTYGNAME, &nameBuffer) == 0 else {
@@ -47,7 +48,7 @@ public final class PTYSession: InteractiveSession, @unchecked Sendable {
         let slavePath = String(cString: nameBuffer)
 
         // Holding the slave open while spawning keeps the pty alive and makes the window size stick.
-        let hold = open(slavePath, O_RDWR | O_NOCTTY)
+        let hold = FileDescriptors.open(slavePath, O_RDWR | O_NOCTTY)
         guard hold >= 0 else {
             let code = errno
             close(master)
