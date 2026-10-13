@@ -195,12 +195,24 @@ final class AppModel {
         case .scanning, .running, .stopping, .confirming: return
         case .idle, .review, .done, .failed: break
         }
+        // A stopped run can outlive the UI's wait (see `cancelRun`). Until it has put the whitelist back, no scan.
+        guard !RunTeardown.shared.isActive(kind) else {
+            update(kind) {
+                $0.phase = .failed
+                $0.result = nil
+                $0.wasCancelled = false
+                $0.errorText = "Mole is still stopping. Wait a moment, then try again."
+            }
+            return
+        }
         tasks[kind]?.cancel()
         var s = state(kind)
         s.phase = .scanning
         s.errorText = nil
         s.keepError = nil
         s.wasCancelled = false
+        // A scan starts a new picture: whatever the last run freed is no longer this screen's story.
+        s.result = nil
         states[kind] = s
 
         let generation = (scanGeneration[kind] ?? 0) + 1
@@ -302,10 +314,12 @@ final class AppModel {
     }
 
     /// Quit path: stops every run that is still going, and returns once each one has torn down.
+    /// Returns with every stopped run already settled, so the phase is no longer `.stopping` when it returns.
     func stopAllAndWait() async {
         for kind in JobKind.allCases where state(kind).phase == .running { cancelRun(kind) }
         for kind in JobKind.allCases where state(kind).phase == .stopping {
             await RunTeardown.shared.waitUntilIdle(kind, timeout: Self.stopLimit)
+            finishStop(kind)
         }
     }
 

@@ -293,6 +293,36 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(model.state(.purge).logRevision, 2_100)
     }
 
+    /// The failed screen shows the stored result. A scan that fails or is cancelled after an earlier run must not
+    /// repeat that run's freed bytes as if they belonged to this failure.
+    func testFailedOrCancelledScanDoesNotRepeatAnEarlierRunsResult() async {
+        let earlier = JobState(phase: .done, result: RunResult(freedBytes: 4_000_000_000, itemCount: 9, exitCode: 0, log: ""))
+
+        let failing = AppModel(jobs: [.purge: FailingJob(kind: .purge, error: BurrowError.timeout("mo purge --dry-run"))])
+        failing.preload(.purge, earlier)
+        failing.scan(.purge)
+        await until(failing, .purge, .failed)
+        XCTAssertNil(failing.state(.purge).result)
+
+        let cancelled = AppModel(jobs: [.purge: MockJob(kind: .purge, scanDelay: .seconds(5))])
+        cancelled.preload(.purge, earlier)
+        cancelled.scan(.purge)
+        cancelled.cancelScan(.purge)
+        XCTAssertEqual(cancelled.state(.purge).phase, .failed)
+        XCTAssertNil(cancelled.state(.purge).result)
+    }
+
+    /// A stop whose teardown outlived the UI's wait must still block a new scan: the whitelist may not be back yet.
+    func testScanIsRefusedWhileAStoppedRunIsStillTearingDown() async {
+        let model = AppModel(jobs: [.purge: MockJob(kind: .purge, scanDelay: .zero)])
+        RunTeardown.shared.begin(.purge)
+        defer { RunTeardown.shared.end(.purge) }
+        model.scan(.purge)
+        XCTAssertEqual(model.state(.purge).phase, .failed)
+        XCTAssertNil(model.state(.purge).scan)
+        XCTAssertTrue(model.state(.purge).errorText?.contains("still stopping") == true)
+    }
+
     // MARK: Selection and always keep
 
     func testSelectAllWithinVisibleRowsOnly() async {
