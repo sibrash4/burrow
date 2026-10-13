@@ -51,9 +51,18 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     private var lastMove = Date.distantPast
     /// Added to the "N selected" counter to simulate a header that disagrees with the rows.
     var headerCountOffset = 0
-    /// Text Mole prints after the first Enter (the confirm screen) and after the second (the run).
+    /// Text Mole prints after the first Enter (the confirm screen).
     var confirmScreen = ""
+    /// Text Mole prints once the run starts, after the confirm prompt is erased (see `runPromptLinger`).
     var runOutput = ""
+    /// Mole redraws its confirm line as it starts. This is printed right at the second Enter, before the erase.
+    var runPromptEcho = ""
+    /// How long the confirm prompt stays on screen after the second Enter before Mole erases it.
+    var runPromptLinger: TimeInterval = 0
+    private var runStartedAt: Date?
+    private var runOutputPrinted = false
+    /// Gap between the erase and the run output, so a reader can take its mark in between.
+    private static let eraseGap: TimeInterval = 0.3
     private(set) var sent: [String] = []
 
     init(kind: MenuKind, items: [FakeMenuItem], perPage: Int = 5, cursor: Int = 0, transcript: String = "") {
@@ -68,6 +77,7 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
 
     func send(_ keys: String) throws {
         lock.lock(); defer { lock.unlock() }
+        advance()
         // Same as PTYSession: writing to a finished process throws.
         if exited { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: "Mole is no longer running.") }
         sent.append(keys)
@@ -84,7 +94,12 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
             if !stuckRows.contains(cursor) { items[cursor].selected.toggle() }
         case TerminalKey.enter:
             enterCount += 1
-            if enterCount == 1 { transcriptText += confirmScreen } else { transcriptText += runOutput; exited = true }
+            if enterCount == 1 {
+                transcriptText += confirmScreen
+            } else {
+                runStartedAt = Date()
+                transcriptText += runPromptEcho
+            }
         case TerminalKey.quit:
             exited = true
         default:
@@ -92,15 +107,24 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
         }
     }
 
-    func currentFrame() -> String { lock.withLock { render() } }
-    func transcript() -> String { lock.withLock { transcriptText } }
+    func currentFrame() -> String { lock.withLock { () -> String in advance(); return render() } }
+    func transcript() -> String { lock.withLock { () -> String in advance(); return transcriptText } }
     var lines: AsyncStream<String> { AsyncStream { $0.finish() } }
     func terminate() { lock.withLock { exited = true } }
+
+    /// Caller holds the lock. Once the confirm prompt has been erased, prints the run output and exits.
+    private func advance() {
+        guard let started = runStartedAt, !runOutputPrinted else { return }
+        guard Date() >= started.addingTimeInterval(runPromptLinger + Self.eraseGap) else { return }
+        runOutputPrinted = true
+        transcriptText += runOutput
+        exited = true
+    }
 
     func waitForFrame(timeout: TimeInterval, _ predicate: @escaping @Sendable (String) -> Bool) async throws -> String {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            let (frame, ended) = lock.withLock { (render(), exited) }
+            let (frame, ended) = lock.withLock { () -> (String, Bool) in advance(); return (render(), exited) }
             if predicate(frame) { return frame }
             // Same as PTYSession: if Mole is gone and the screen never matched, fail now instead of waiting.
             if ended { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: lock.withLock { transcriptText }) }
@@ -112,7 +136,7 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     func waitForExit(timeout: TimeInterval) async throws -> Int32 {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if lock.withLock({ exited }) { return exitCodeAfterExit }
+            if lock.withLock({ () -> Bool in advance(); return exited }) { return exitCodeAfterExit }
             try await Task.sleep(nanoseconds: 2_000_000)
         }
         throw BurrowError.timeout("exit")
@@ -141,6 +165,10 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
         if kind == .purge {
             let lagging = pathLag > 0 && Date().timeIntervalSince(lastMove) < pathLag
             out.append("Path: \(items[lagging ? previousCursor : cursor].path)")
+        }
+        // The confirm prompt is on screen until Mole erases it.
+        if let started = runStartedAt, Date() < started.addingTimeInterval(runPromptLinger) {
+            out.append(MenuSession.confirmMarker)
         }
         out.append(kind == .installer ? "↑↓  |  Space Select  |  Enter Confirm  |  A All  |  I Invert  |  Q Quit"
                                       : "↑↓ [] Projects / Find | Space Select | Enter Confirm | A All | I Invert | X Skip Project | Q Quit")

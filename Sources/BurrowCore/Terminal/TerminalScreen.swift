@@ -157,7 +157,8 @@ struct TerminalScreen {
 
     private mutating func eraseLine(_ mode: Int) {
         switch mode {
-        case 1: erase(row: row, from: 0, to: column + 1)
+        // `column` can be `columns` after a print fills the last cell, so clamp before using it as an end index.
+        case 1: erase(row: row, from: 0, to: min(column + 1, columns))
         case 2: erase(row: row, from: 0, to: columns)
         default: erase(row: row, from: column, to: columns)
         }
@@ -167,7 +168,7 @@ struct TerminalScreen {
         switch mode {
         case 1:
             for r in 0..<row { erase(row: r, from: 0, to: columns) }
-            erase(row: row, from: 0, to: column + 1)
+            erase(row: row, from: 0, to: min(column + 1, columns))
         case 2, 3:
             clearAll()
         default:

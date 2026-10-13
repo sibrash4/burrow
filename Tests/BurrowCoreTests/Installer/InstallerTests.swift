@@ -79,6 +79,32 @@ final class InstallerTests: XCTestCase {
         XCTAssertEqual(result?.exitCode, 0)
     }
 
+    /// F21: Mole redraws its confirm line as Enter lands, and only then erases it and prints the run. The run
+    /// log must start after the erase, so the redrawn prompt is not reported as run output.
+    func testRunLogStartsAfterConfirmPromptIsErased() async throws {
+        let scan = InstallerParser.scanResult(entries: try fixtureEntries())
+        let wanted = ["Flux.zip | Downloads", "Ice.zip | Downloads"]
+        let items = scan.allItems.map { FakeMenuItem(name: $0.title, location: "Downloads", size: ByteSize.format($0.bytes ?? 0).replacingOccurrences(of: " MB", with: "MB")) }
+        let session = FakeMenuSession(kind: .installer, items: items, perPage: 6)
+        session.confirmScreen = """
+
+        Files to be removed:
+          ✓ Flux.zip , 2.1MB
+          ✓ Ice.zip , 3.5MB
+
+        ➤ Delete 2 installers, 5.6MB  Enter confirm, ESC cancel:
+        """
+        session.runPromptEcho = "\r\n➤ Delete 2 installers, 5.6MB  Enter confirm, ESC cancel:\r\n"
+        session.runPromptLinger = 0.5
+        session.runOutput = "Removing...\r\nRemoved 2 installers, freed 5.34MB\r\n"
+        let job = InstallerJob(launcher: FakeLauncher(session: session), driver: fast)
+
+        let (lines, result) = try await collect(job.run(selection: Set(wanted), from: scan))
+        XCTAssertFalse(lines.contains { $0.contains(MenuSession.confirmMarker) }, "run log picked up the erased prompt: \(lines)")
+        XCTAssertTrue(lines.contains("Removed 2 installers, freed 5.34MB"))
+        XCTAssertEqual(result?.itemCount, 2)
+    }
+
     func testRunStopsWhenConfirmScreenDisagrees() async throws {
         let scan = InstallerParser.scanResult(entries: try fixtureEntries())
         let items = scan.allItems.map { FakeMenuItem(name: $0.title, location: "Downloads", size: "2.1MB") }

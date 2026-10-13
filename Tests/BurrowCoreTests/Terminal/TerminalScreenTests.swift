@@ -64,6 +64,18 @@ final class TerminalScreenTests: XCTestCase {
         XCTAssertEqual(s.frame(), "a")
     }
 
+    /// F22: a full line leaves the cursor at column == columns; ESC[1K and ESC[1J used column + 1 as an end
+    /// index and trapped on it.
+    func testEraseToStartWithCursorAtRightEdgeDoesNotTrap() {
+        var line = TerminalScreen(columns: 5, rows: 3)
+        line.feed("12345\u{1B}[1K".unicodeScalars)
+        XCTAssertEqual(line.frame(), "")
+
+        var display = TerminalScreen(columns: 5, rows: 3)
+        display.feed("abcde\r\nfghij\u{1B}[1J".unicodeScalars)
+        XCTAssertEqual(display.frame(), "")
+    }
+
     func testInstallerFixtureFrame() throws {
         let raw = try fixture("installer_dryrun").replacingOccurrences(of: "\n", with: "\r\n")
         let frame = screen(raw, columns: 100, rows: 30).frame()
