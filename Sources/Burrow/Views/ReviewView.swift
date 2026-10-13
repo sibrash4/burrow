@@ -70,7 +70,7 @@ struct ReviewView: View {
                 ForEach(notes, id: \.self) { note in
                     Label(note, systemImage: "info.circle")
                         .font(RowType.secondary)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
@@ -102,9 +102,11 @@ struct ReviewView: View {
             } else {
                 list
             }
+            // The native scroller sits at the list's right edge. The bar keeps 20pt clear of it, 8pt more than before.
             StrataBar(layers: layers, total: model.totalBytes(kind))
                 .padding(.vertical, 12)
-                .padding(.horizontal, 12)
+                .padding(.leading, 20)
+                .padding(.trailing, 12)
         }
     }
 
@@ -115,7 +117,7 @@ struct ReviewView: View {
                     ForEach(section.items) { item in
                         ItemRow(
                             item: item,
-                            groupIndex: section.index,
+                            optIn: kind.isOptIn,
                             isOn: model.isSelected(item.id, in: kind),
                             isExpanded: expanded.contains(item.id),
                             onToggle: { model.toggle(item.id, in: kind) },
@@ -190,7 +192,7 @@ struct ReviewView: View {
                 .monospacedDigit()
             Text("\(picked) of \(plural(all, kind.noun.one, kind.noun.many))")
                 .font(RowType.secondary)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .monospacedDigit()
             Spacer()
             if kind != .uninstall {
@@ -230,7 +232,7 @@ struct GroupHeader: View {
             Text(sizeText)
                 .font(RowType.primary)
                 .monospacedDigit()
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
         }
         .textCase(nil)
         .padding(.vertical, 4)

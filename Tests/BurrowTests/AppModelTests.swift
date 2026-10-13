@@ -379,7 +379,8 @@ final class AppModelTests: XCTestCase {
         XCTAssertEqual(JobKind.clean.consequence(), "Caches and logs are deleted.")
         XCTAssertEqual(JobKind.clean.consequence(trashIncluded: true), "Caches and logs are deleted. The Trash is emptied permanently.")
         XCTAssertEqual(JobKind.uninstall.consequence(), "Apps go to the Trash. Running apps are quit first.")
-        XCTAssertTrue(JobKind.aiLeftovers.consequence().hasPrefix("Worktrees are removed with git, not the Trash."))
+        // Matches the merged confirm copy: AI leftovers go to the Trash (ea38033).
+        XCTAssertTrue(JobKind.aiLeftovers.consequence().hasPrefix("Ticked worktrees, transcripts and model caches go to the Trash."))
     }
 
     func testActionTitles() {

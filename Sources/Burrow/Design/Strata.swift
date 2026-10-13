@@ -1,5 +1,16 @@
 import SwiftUI
+import AppKit
 import BurrowCore
+
+/// Text colours that clear WCAG on Burrow's grounds. The system secondary label measures about 3.5:1 on light
+/// grey, so secondary and dimmed text use these instead: 4.5:1 or better in light and dark.
+enum Ink {
+    static let secondary = Color(nsColor: NSColor(name: nil) { appearance in
+        let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        return dark ? NSColor(red: 0.62, green: 0.62, blue: 0.65, alpha: 1)
+                    : NSColor(red: 0.36, green: 0.36, blue: 0.39, alpha: 1)
+    })
+}
 
 /// The four earth hues. They identify categories and nothing else.
 enum StrataHue: Int, CaseIterable {
@@ -10,7 +21,8 @@ enum StrataHue: Int, CaseIterable {
         let base: (Double, Double, Double)
         switch self {
         case .clay: base = dark ? (0.80, 0.52, 0.40) : (0.69, 0.38, 0.27)
-        case .ochre: base = dark ? (0.85, 0.69, 0.33) : (0.74, 0.56, 0.18)
+        // Light ochre is darker than the first pass so it clears 3:1 on white and on the window grey.
+        case .ochre: base = dark ? (0.85, 0.69, 0.33) : (0.58, 0.44, 0.08)
         case .moss: base = dark ? (0.58, 0.70, 0.45) : (0.40, 0.50, 0.28)
         case .slate: base = dark ? (0.55, 0.66, 0.78) : (0.33, 0.43, 0.54)
         }
@@ -34,6 +46,10 @@ enum RowType {
 }
 
 extension JobKind {
+    /// Opt-in lists default to unticked, so an unticked row means "not chosen", not "kept". Those rows dim
+    /// without a strike or a "Kept" label.
+    var isOptIn: Bool { self == .uninstall || self == .aiLeftovers }
+
     func actionTitle(bytes: Int64, count: Int) -> String {
         switch self {
         case .uninstall: return count == 1 ? "Uninstall 1 app" : "Uninstall \(count) apps"

@@ -46,7 +46,7 @@ struct JobView: View {
             VStack(spacing: 12) {
                 ProgressView()
                 Text("Scanning").font(.title3)
-                Text("Mole is looking. Nothing is removed during a scan.").foregroundStyle(.secondary)
+                Text("Mole is looking. Nothing is removed during a scan.").foregroundStyle(Ink.secondary)
                 Button("Cancel") { model.cancelScan(kind) }
                     .keyboardShortcut(.cancelAction)
                     .padding(.top, 8)
@@ -59,7 +59,7 @@ struct JobView: View {
             }
         case .running, .stopping:
             RunningView(status: state.status, log: state.log, logRevision: state.logRevision, progress: state.progress,
-                        stopping: state.phase == .stopping, onStop: { model.cancelRun(kind) })
+                        countText: runCountText(state), stopping: state.phase == .stopping, onStop: { model.cancelRun(kind) })
         case .done:
             DoneView(kind: kind, result: state.result, onAgain: { model.scan(kind) })
         case .failed:
@@ -103,6 +103,15 @@ struct JobView: View {
         case .stopping: return "Stopping"
         default: return kind.subtitle
         }
+    }
+
+    /// Items done out of items chosen, derived from the known progress fraction. nil while progress is unknown.
+    private func runCountText(_ state: JobState) -> String? {
+        guard let progress = state.progress else { return nil }
+        let total = model.selectedCount(kind)
+        guard total > 0 else { return nil }
+        let done = min(total, Int((progress * Double(total)).rounded(.down)))
+        return "\(done) of \(plural(total, kind.noun.one, kind.noun.many))"
     }
 
     private func confirmLines(_ state: JobState) -> [ConfirmSheet.Line] {

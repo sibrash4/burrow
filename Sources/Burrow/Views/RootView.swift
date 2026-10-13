@@ -32,18 +32,20 @@ struct SidebarView: View {
             HStack(spacing: 10) {
                 Image(systemName: kind.symbol)
                     .frame(width: 20)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .accessibilityHidden(true)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(kind.title).font(RowType.primary)
+                    // One line, so every row keeps the same height when the size badge appears or goes.
                     Text(kind.subtitle)
                         .font(RowType.secondary)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(2)
+                        .foregroundStyle(Ink.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
                 }
                 Spacer(minLength: 4)
                 if let size = model.sidebarSize(kind) {
-                    Text(size).font(RowType.secondary).foregroundStyle(.secondary).monospacedDigit()
+                    Text(size).font(RowType.secondary).foregroundStyle(Ink.secondary).monospacedDigit()
                 }
             }
             .padding(.vertical, 3)
@@ -61,7 +63,7 @@ struct SidebarView: View {
                 }
             }
             .font(RowType.secondary)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(model.moleStatus.isVersionMismatch || model.startupNotice != nil ? 12 : 0)
         }
@@ -77,11 +79,11 @@ struct MoleMissingView: View {
         VStack(spacing: 16) {
             Image(systemName: "shippingbox")
                 .font(.system(size: 34))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .accessibilityHidden(true)
             Text("Burrow needs Mole").font(.title2.weight(.semibold))
             Text("Burrow is a window onto Mole, the command-line cleaner. Install it with Homebrew, then check again.")
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: 380)
             HStack(spacing: 8) {
