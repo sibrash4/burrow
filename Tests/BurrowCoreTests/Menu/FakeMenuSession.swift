@@ -1,0 +1,145 @@
+import Foundation
+@testable import BurrowCore
+
+enum MenuFixtures {
+    static func text(_ name: String) throws -> String {
+        let url = try unwrap(Bundle.module.url(forResource: name, withExtension: "txt", subdirectory: "Fixtures"))
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private static func unwrap(_ url: URL?) throws -> URL {
+        guard let url else { throw CocoaError(.fileNoSuchFile) }
+        return url
+    }
+
+    /// Terminal bytes to screen text: drop escape sequences, split on carriage returns, trim lines.
+    static func stripped(_ raw: String) -> String {
+        let noEscapes = raw.replacingOccurrences(of: "\u{1B}\\[[0-9;?]*[A-Za-z]", with: "", options: .regularExpression)
+        return noEscapes.replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.joined(separator: "\n")
+    }
+}
+
+struct FakeMenuItem {
+    var name: String
+    var location: String
+    var size: String = "1.0MB"
+    var path: String = ""
+    var selected = false
+}
+
+/// Simulates Mole's checklist: cursor, paging, Space, Enter, q, and the header counters.
+final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
+    let kind: MenuKind
+    let perPage: Int
+    private let lock = NSLock()
+    private var items: [FakeMenuItem]
+    private var cursor = 0
+    private var top = 0
+    private var transcriptText = ""
+    private var exited = false
+    private var enterCount = 0
+
+    /// Rows whose Space press does nothing (a row Mole refuses to toggle).
+    var stuckRows: Set<Int> = []
+    /// Added to the "N selected" counter to simulate a header that disagrees with the rows.
+    var headerCountOffset = 0
+    /// Text Mole prints after the first Enter (the confirm screen) and after the second (the run).
+    var confirmScreen = ""
+    var runOutput = ""
+    private(set) var sent: [String] = []
+
+    init(kind: MenuKind, items: [FakeMenuItem], perPage: Int = 5, cursor: Int = 0, transcript: String = "") {
+        self.transcriptText = transcript
+        self.kind = kind; self.items = items; self.perPage = perPage; self.cursor = cursor
+        self.top = max(0, min(cursor, items.count - perPage))
+    }
+
+    var selectedNames: [String] { lock.withLock { items.filter(\.selected).map(\.name) } }
+    var quitSent: Bool { lock.withLock { sent.contains("q") } }
+    var enterPresses: Int { lock.withLock { enterCount } }
+
+    func send(_ keys: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        sent.append(keys)
+        switch keys {
+        case TerminalKey.down:
+            if cursor < items.count - 1 { cursor += 1 }
+            if cursor >= top + perPage { top = cursor - perPage + 1 }
+        case TerminalKey.up:
+            if cursor > 0 { cursor -= 1 }
+            if cursor < top { top = cursor }
+        case TerminalKey.space:
+            if !stuckRows.contains(cursor) { items[cursor].selected.toggle() }
+        case TerminalKey.enter:
+            enterCount += 1
+            if enterCount == 1 { transcriptText += confirmScreen } else { transcriptText += runOutput; exited = true }
+        case TerminalKey.quit:
+            exited = true
+        default:
+            break
+        }
+    }
+
+    func currentFrame() -> String { lock.withLock { render() } }
+    func transcript() -> String { lock.withLock { transcriptText } }
+    var lines: AsyncStream<String> { AsyncStream { $0.finish() } }
+    func terminate() { lock.withLock { exited = true } }
+
+    func waitForFrame(timeout: TimeInterval, _ predicate: @escaping @Sendable (String) -> Bool) async throws -> String {
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let frame = currentFrame()
+            if predicate(frame) { return frame }
+            guard Date() < deadline else { throw BurrowError.timeout("frame") }
+            try await Task.sleep(nanoseconds: 2_000_000)
+        }
+    }
+
+    func waitForExit(timeout: TimeInterval) async throws -> Int32 {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if lock.withLock({ exited }) { return 0 }
+            try await Task.sleep(nanoseconds: 2_000_000)
+        }
+        throw BurrowError.timeout("exit")
+    }
+
+    private func render() -> String {
+        let selected = items.filter(\.selected)
+        let count = selected.count + headerCountOffset
+        let scroll = items.count > perPage ? " [\(cursor + 1)/\(items.count)]" : ""
+        var out: [String]
+        switch kind {
+        case .installer:
+            out = ["Select Installers to Remove\(scroll) , \(selected.count * 1)MB, \(count) selected", ""]
+        case .purge:
+            out = ["Select Artifacts to Purge\(scroll)", "\(selected.count)MB, \(count) selected"]
+        }
+        for index in top..<min(top + perPage, items.count) {
+            let item = items[index]
+            let prefix = (index == cursor ? "➤ " : "") + (item.selected ? "●" : "○")
+            switch kind {
+            case .installer: out.append("\(prefix) \(item.name)      \(item.size) | \(item.location)")
+            case .purge: out.append("\(prefix) ─ \(item.location)      \(item.size) | \(item.name)")
+            }
+        }
+        out.append("")
+        if kind == .purge { out.append("Path: \(items[cursor].path)") }
+        out.append(kind == .installer ? "↑↓  |  Space Select  |  Enter Confirm  |  A All  |  I Invert  |  Q Quit"
+                                      : "↑↓ [] Projects / Find | Space Select | Enter Confirm | A All | I Invert | X Skip Project | Q Quit")
+        return out.joined(separator: "\n")
+    }
+}
+
+final class FakeLauncher: InteractiveLaunching, @unchecked Sendable {
+    let session: FakeMenuSession
+    private let lock = NSLock()
+    private(set) var launched: [[String]] = []
+    init(session: FakeMenuSession) { self.session = session }
+
+    func launch(_ args: [String], environment: [String: String], columns: Int, rows: Int) throws -> InteractiveSession {
+        lock.withLock { launched.append(args) }
+        return session
+    }
+}
