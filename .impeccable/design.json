@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-13T11:02:28Z",
+  "title": "Design System: Burrow",
+  "extensions": {
+    "colorMeta": {
+      "ink-secondary": {
+        "role": "neutral",
+        "displayName": "Ink Secondary",
+        "canonical": "#5C5C63",
+        "darkVariant": "#9E9EA6",
+        "increasedContrast": null,
+        "tonalRamp": ["#0B0A10", "#26262C", "#44444B", "#65656D", "#888890", "#ADADB6", "#D3D3DC", "#EDEDF7"]
+      },
+      "strata-clay": {
+        "role": "accent",
+        "displayName": "Clay",
+        "canonical": "#B06145",
+        "darkVariant": "#CC8566",
+        "increasedContrast": { "light": "#844934", "dark": "#D9A38C" },
+        "tonalRamp": ["#1B0400", "#461300", "#742B0D", "#9A4D31", "#C17154", "#EA9578", "#FFC5B1", "#FFE9E2"]
+      },
+      "strata-ochre": {
+        "role": "accent",
+        "displayName": "Ochre",
+        "canonical": "#947014",
+        "darkVariant": "#D9B054",
+        "increasedContrast": { "light": "#6F540F", "dark": "#E2C47F" },
+        "tonalRamp": ["#110A00", "#332401", "#584103", "#816004", "#A8832F", "#CEA857", "#F6CF7D", "#FFEDC7"]
+      },
+      "strata-moss": {
+        "role": "accent",
+        "displayName": "Moss",
+        "canonical": "#668047",
+        "darkVariant": "#94B273",
+        "increasedContrast": { "light": "#4D6036", "dark": "#AFC696" },
+        "tonalRamp": ["#060E00", "#1C2C01", "#374D15", "#577038", "#79935B", "#9DB97E", "#C3E0A3", "#DDFABD"]
+      },
+      "strata-slate": {
+        "role": "accent",
+        "displayName": "Slate",
+        "canonical": "#546E8A",
+        "darkVariant": "#8CA8C7",
+        "increasedContrast": { "light": "#3F5267", "dark": "#A9BED5" },
+        "tonalRamp": ["#000B1D", "#112840", "#2F4761", "#4F6884", "#718CA9", "#95B1D0", "#BBD7F7", "#E3F0FF"]
+      }
+    },
+    "typographyMeta": {
+      "row-primary": { "displayName": "Row Primary", "purpose": "Item titles, size columns, footer total. Group titles use semibold 600. One of the two row sizes." },
+      "row-secondary": { "displayName": "Row Secondary", "purpose": "Detail lines, counts, Kept label, notes, paths (monospaced), sidebar subtitles. The second row size." }
+    },
+    "shadows": [],
+    "motion": [
+      { "name": "strata-layer-resize", "value": "easeOut 0.22s", "purpose": "Strata bar layers resize when rows are ticked or unticked. Disabled under Reduce Motion." }
+    ],
+    "breakpoints": [
+      { "name": "window-min", "value": "940px x 600px" },
+      { "name": "sidebar", "value": "240px to 320px (ideal 260px)" },
+      { "name": "uninstall-leftovers-pane", "value": "300px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Item Row (Kept)",
+      "kind": "custom",
+      "description": "Clean, Purge and Installers rows that are unticked: dimmed, struck size, Kept label.",
+      "html": "<div class=\"ds-row ds-row-kept\"><input class=\"ds-check\" type=\"checkbox\"><span class=\"ds-title\">Xcode DerivedData</span><span class=\"ds-size-col\"><span class=\"ds-size\">2.1 GB</span><span class=\"ds-kept\">Kept</span></span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:10px;padding:3px 0;font:400 13px/1.25 -apple-system,system-ui,sans-serif;color:#000}.ds-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-size-col{width:76px;display:flex;flex-direction:column;align-items:flex-end}.ds-size{font-variant-numeric:tabular-nums}.ds-kept{font-size:11px;color:#5C5C63}.ds-row-kept .ds-title{color:#5C5C63}.ds-row-kept .ds-size{color:#5C5C63;text-decoration:line-through}.ds-row:focus-visible{outline:2px solid currentColor;outline-offset:2px}"
+    },
+    {
+      "name": "Item Row (Opt-in, unticked)",
+      "kind": "custom",
+      "description": "Uninstall and AI leftovers rows that are unticked: dimmed only, no strike and no label.",
+      "html": "<div class=\"ds-row ds-row-optin\"><input class=\"ds-check\" type=\"checkbox\"><span class=\"ds-title\">Example.app</span><span class=\"ds-size-col\"><span class=\"ds-size\">412 MB</span></span></div>",
+      "css": ".ds-row{display:flex;align-items:center;gap:10px;padding:3px 0;font:400 13px/1.25 -apple-system,system-ui,sans-serif;color:#000}.ds-title{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.ds-size-col{width:76px;display:flex;flex-direction:column;align-items:flex-end}.ds-size{font-variant-numeric:tabular-nums}.ds-row-optin .ds-title,.ds-row-optin .ds-size{color:#5C5C63}.ds-row:focus-visible{outline:2px solid currentColor;outline-offset:2px}"
+    },
+    {
+      "name": "Group Header",
+      "kind": "custom",
+      "description": "Category header with tri-state checkbox, strata swatch, title and partial-size text.",
+      "html": "<div class=\"ds-group\"><input class=\"ds-check\" type=\"checkbox\"><span class=\"ds-swatch\" style=\"background:#B06145\"></span><span class=\"ds-group-title\">Caches</span><span class=\"ds-group-size\">1.2 GB of 3.4 GB</span></div>",
+      "css": ".ds-group{display:flex;align-items:center;gap:10px;padding:4px 0;font:400 13px/1.25 -apple-system,system-ui,sans-serif}.ds-swatch{width:10px;height:10px;border-radius:2.5px;flex:none}.ds-group-title{font-weight:600;color:#000}.ds-group-size{margin-left:auto;color:#5C5C63;font-variant-numeric:tabular-nums}"
+    },
+    {
+      "name": "Strata Bar",
+      "kind": "custom",
+      "refersTo": "strata-bar",
+      "description": "Thin vertical bar on the right edge of the review list; one layer per category, sized by selected bytes, anchored to the bottom.",
+      "html": "<div class=\"ds-strata\"><div class=\"ds-layer\" style=\"height:55%;background:#B06145\"></div><div class=\"ds-layer\" style=\"height:25%;background:#668047\"></div><div class=\"ds-layer\" style=\"height:12%;background:#546E8A\"></div></div>",
+      "css": ".ds-strata{width:12px;height:240px;border-radius:4px;overflow:hidden;display:flex;flex-direction:column;justify-content:flex-end;gap:1px;background:rgba(0,0,0,0.08)}.ds-layer{min-height:2px;flex:none;transition:height .22s ease-out}@media (prefers-reduced-motion: reduce){.ds-layer{transition:none}}"
+    },
+    {
+      "name": "Strata Swatch",
+      "kind": "custom",
+      "refersTo": "strata-swatch",
+      "description": "Small rounded square naming a category by hue, in group headers and the confirm sheet.",
+      "html": "<span class=\"ds-swatch\" style=\"background:#668047\"></span>",
+      "css": ".ds-swatch{display:inline-block;width:10px;height:10px;border-radius:2.5px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Soil Strata",
+    "overview": "Reclaimable space is a stack of layers you dig out one at a time. Burrow shows exactly what Mole would remove, grouped by category and sized, and lets you untick anything you want to keep before a single confirmation. The ground is neutral and native: system window materials, SF Pro, the system accent for actions, and four muted earth hues that name categories and nothing else.\n\nThe look refuses the category default. There is no giant \"9.5 GB junk\" ring or donut, no red alarm badge, and no fear copy. Sizes are plain numbers in monospaced digits. Density is low and calm, sized for an occasional cycle that takes under a minute.",
+    "keyCharacteristics": [
+      "Native macOS controls and system materials; no custom chrome.",
+      "Four earth hues identify categories; they never signal alarm or action.",
+      "Kept rows show their state by form as well as by colour.",
+      "Two row text sizes, with sizes right-aligned in monospaced digits.",
+      "Flat surfaces; depth comes from system materials and native sheets.",
+      "A thin strata bar on the right edge tallies selected bytes live."
+    ],
+    "rules": [
+      { "name": "The Layers Not Alarm Rule", "body": "The four strata hues identify categories and never carry alarm, status or action. Red appears only where a write has failed. No size is coloured by how large it is.", "section": "colors" },
+      { "name": "The Two-Size Row Rule", "body": "Rows use exactly two sizes, 13pt and 11pt. Weight and colour mark rank inside a row; a third size does not.", "section": "typography" },
+      { "name": "The Flat Window Rule", "body": "Surfaces are flat. A modal step is a native sheet, not a shadow.", "section": "elevation" },
+      { "name": "The Kept Shows Its Form Rule", "body": "In a clean-style list, an unticked row is kept, and it shows that in form as well as colour: dimmed, struck through and labelled \"Kept\".", "section": "components" },
+      { "name": "The Opt-In Exception", "body": "Uninstall and AI leftovers default to unticked, so an unticked row there means \"not chosen\", not \"kept\". Those rows dim and carry no strike and no label.", "section": "components" },
+      { "name": "The Shrinking Bar Rule", "body": "The bar tallies selected bytes; it is not a gauge of the disk. Unticking a row thins its layer, and nothing else on the bar carries meaning.", "section": "components" }
+    ],
+    "dos": [
+      "Do dim kept rows, strike their size and label them \"Kept\" in clean-style lists, so the state reads without colour.",
+      "Do keep the opt-in exception: Uninstall and AI leftovers dim unticked rows and nothing more.",
+      "Do set secondary text in ink-secondary, which holds at least 4.5:1 in both appearances.",
+      "Do right-align sizes in a fixed-width column with monospaced digits.",
+      "Do keep row text to the two sizes, 13pt and 11pt.",
+      "Do use the system accent for actions, and the system bar and quaternary materials for chrome.",
+      "Do write confirm copy in plain words: the headline names the count and size, the sentence says what happens to each kind, and \"Anything you unticked stays where it is.\" follows."
+    ],
+    "donts": [
+      "Don't use the strata hues for alarm, status or buttons.",
+      "Don't strike or label unticked rows in Uninstall or AI leftovers.",
+      "Don't add a third row size or a custom display face.",
+      "Don't add shadows to resting surfaces.",
+      "Don't use a ring or donut total, a red alarm badge, or fear words in the confirm sheet.",
+      "Don't read the strata bar as a gauge against the disk total; it tallies selected bytes."
+    ]
+  }
+}
