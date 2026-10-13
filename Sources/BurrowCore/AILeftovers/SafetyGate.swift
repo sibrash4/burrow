@@ -54,7 +54,8 @@ public struct SafetyGate: Sendable {
         guard FileManager.default.fileExists(atPath: p) else {
             return "No longer exists"
         }
-        if cwds.contains(where: { PathCheck.isInside($0, p) }) {
+        let real = PathCheck.resolved(p)
+        if cwds.contains(where: { PathCheck.isInside($0, real) }) {
             return "In use by a running process"
         }
         return nil

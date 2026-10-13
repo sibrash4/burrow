@@ -1,6 +1,6 @@
 // The AI leftovers job. The only job in Burrow that removes files itself, so it is strict:
-// - git worktrees are removed with `git worktree remove` (never --force),
-// - everything else is moved to the Trash with FileManager.trashItem,
+// - everything is moved to the Trash with FileManager.trashItem, git-ignored files inside worktrees included,
+// - a worktree folder is trashed whole, then `git worktree prune` drops git's record of it,
 // - every rule is re-checked right before each item is removed; anything that no longer qualifies is skipped and reported.
 
 import Foundation
@@ -11,20 +11,20 @@ public struct AILeftoversJob: MoleJob {
     public let shell: ShellRunning
     public let cwds: ProcessCwdProviding
     public let trasher: Trashing
-    public let worktrees: WorktreeRemoving
+    public let worktrees: WorktreePruning
 
     public init(
         config: AILeftoversConfig = AILeftoversConfig(),
         shell: ShellRunning = ProcessShell(),
         cwds: ProcessCwdProviding? = nil,
         trasher: Trashing = SystemTrasher(),
-        worktrees: WorktreeRemoving? = nil
+        worktrees: WorktreePruning? = nil
     ) {
         self.config = config
         self.shell = shell
         self.cwds = cwds ?? LsofCwdProvider(shell: shell)
         self.trasher = trasher
-        self.worktrees = worktrees ?? GitWorktreeRemover(shell: shell)
+        self.worktrees = worktrees ?? GitWorktreePruner(shell: shell)
     }
 
     static let worktreeGroupID = "agent-worktrees"
@@ -63,7 +63,7 @@ public struct AILeftoversJob: MoleJob {
             }
         }
 
-        var notes = ["Nothing is deleted. Ticked files go to the Trash; git worktrees are removed with git."]
+        var notes = ["Nothing is deleted. Ticked files and worktrees go to the Trash, git-ignored files inside worktrees included."]
         if !cwdsKnown {
             notes.append("Could not check which folders are in use, so nothing can be selected.")
         }
@@ -117,9 +117,13 @@ public struct AILeftoversJob: MoleJob {
             problems.append("Unknown item \(id): skipped.")
         }
 
-        for group in scan.groups {
+        stop: for group in scan.groups {
             for item in group.items where selection.contains(item.id) {
-                try Task.checkCancellation()
+                // Cancelled: keep the totals of what already moved, and say where the run stopped.
+                if Task.isCancelled {
+                    problems.append("Stopped by you after \(removedItems) items. The rest were not touched.")
+                    break stop
+                }
 
                 guard item.selectable else {
                     problems.append("\(item.title): not removable (\(item.note ?? "not selectable")).")
@@ -129,6 +133,13 @@ public struct AILeftoversJob: MoleJob {
                 if group.id == Self.worktreeGroupID {
                     await removeWorktree(item, scanner: worktreeScanner, liveCwds: liveCwds,
                                          freed: &freed, removed: &removedItems, problems: &problems, line: line, emit: emit)
+                    continue
+                }
+
+                // A Claude project folder is offered only while no session is open in it. Re-check at run time.
+                if item.id.hasPrefix("claude-transcripts:"), let folder = item.detail,
+                   let reason = ClaudeScanner.projectInUseReason(folder: folder, cwds: liveCwds, now: config.now) {
+                    problems.append("Skipped \(item.title): \(reason).")
                     continue
                 }
 
@@ -179,19 +190,25 @@ public struct AILeftoversJob: MoleJob {
             problems.append("Skipped \(item.title): could not find the main repository.")
             return
         }
-        emit(.status("Removing worktree \(item.title)"))
+        emit(.status("Moving worktree to Trash \(item.title)"))
+        // The whole folder goes to the Trash, so git-ignored files stay recoverable. Git is only asked to forget it.
         do {
-            let result = try await worktrees.removeWorktree(mainRepo: main, worktreePath: path)
-            if result.exitCode == 0 {
-                freed += assessment.bytes
-                removed += 1
-                line("Removed worktree \(path)")
-            } else {
-                let why = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
-                problems.append("git refused to remove \(item.title): \(why.isEmpty ? "exit \(result.exitCode)" : why)")
+            _ = try trasher.trash(URL(fileURLWithPath: path))
+        } catch {
+            problems.append("Could not move \(item.title) to Trash: \(error.localizedDescription)")
+            return
+        }
+        freed += assessment.bytes
+        removed += 1
+        line("Moved worktree to Trash \(path)")
+        do {
+            let pruned = try await worktrees.prune(mainRepo: main)
+            if pruned.exitCode != 0 {
+                let why = pruned.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+                problems.append("Moved \(item.title) to Trash, but git could not forget it: \(why.isEmpty ? "exit \(pruned.exitCode)" : why)")
             }
         } catch {
-            problems.append("Could not remove \(item.title): \(error.localizedDescription)")
+            problems.append("Moved \(item.title) to Trash, but git could not forget it: \(error.localizedDescription)")
         }
     }
 

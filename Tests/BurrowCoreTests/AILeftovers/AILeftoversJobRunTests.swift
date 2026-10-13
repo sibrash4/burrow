@@ -20,6 +20,21 @@ final class ScriptedCwds: ProcessCwdProviding, @unchecked Sendable {
     }
 }
 
+/// Trashes through `inner`, then cancels the task it runs in, as pressing Stop mid-run would.
+final class CancelAfterFirstTrash: Trashing, @unchecked Sendable {
+    let inner: FakeTrasher
+
+    init(inner: FakeTrasher) {
+        self.inner = inner
+    }
+
+    func trash(_ url: URL) throws -> URL? {
+        let moved = try inner.trash(url)
+        withUnsafeCurrentTask { $0?.cancel() }
+        return moved
+    }
+}
+
 final class AILeftoversJobRunTests: XCTestCase {
     var home: URL!
     var trashDir: URL!
@@ -38,17 +53,18 @@ final class AILeftoversJobRunTests: XCTestCase {
         AILeftoversConfig(home: home, now: .now, thresholdDays: 30)
     }
 
-    private func makeJob(cwds: ScriptedCwds, trasher: FakeTrasher) -> AILeftoversJob {
+    private func makeJob(cwds: ScriptedCwds, trasher: Trashing) -> AILeftoversJob {
         AILeftoversJob(
             config: config,
             shell: RoutingShell(),
             cwds: cwds,
             trasher: trasher,
-            worktrees: GitWorktreeRemover(shell: RoutingShell())
+            worktrees: GitWorktreePruner(shell: RoutingShell())
         )
     }
 
     /// Repo with a clean, old worktree plus one old Claude transcript and one recent transcript.
+    /// The recent one is two days old: not offered, but outside the 24-hour "may be open" window.
     private func makeScenario() async throws -> (repo: URL, worktree: URL, transcript: URL, recent: URL) {
         let repo = try await Fixture.makeRepo(home: home)
         let wt = home.appendingPathComponent("dev/wts/clean", isDirectory: true)
@@ -61,6 +77,7 @@ final class AILeftoversJobRunTests: XCTestCase {
         try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86400)], ofItemAtPath: transcript.path)
         let recent = project.appendingPathComponent("new.jsonl")
         try Fixture.write("{}\n", to: recent)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-2 * 86400)], ofItemAtPath: recent.path)
         return (repo, wt, transcript, recent)
     }
 
@@ -85,9 +102,12 @@ final class AILeftoversJobRunTests: XCTestCase {
         let scan = try await job.scan()
         let transcriptItem = try XCTUnwrap(scan.allItems.first { $0.id.hasPrefix("claude-transcripts:") })
         XCTAssertFalse(transcriptItem.selectedByDefault)
+        let wtItem = try XCTUnwrap(scan.allItems.first { $0.id == s.worktree.path })
+        XCTAssertFalse(wtItem.selectedByDefault)
 
         var selection = scan.defaultSelection
         selection.insert(transcriptItem.id)
+        selection.insert(wtItem.id)
         let (result, lines) = try await collect(job, selection: selection, scan: scan)
 
         let run = try XCTUnwrap(result)
@@ -96,13 +116,13 @@ final class AILeftoversJobRunTests: XCTestCase {
         XCTAssertGreaterThan(run.freedBytes ?? 0, 0)
         XCTAssertFalse(lines.isEmpty)
 
-        // Worktree gone, and git no longer lists it.
+        // Worktree folder moved to the Trash, and git no longer lists it.
         XCTAssertFalse(FileManager.default.fileExists(atPath: s.worktree.path))
         let list = try await Fixture.git(["worktree", "list", "--porcelain"], in: s.repo)
         XCTAssertFalse(list.contains(s.worktree.path))
 
-        // Old transcript moved to the (fake) Trash; the recent one untouched.
-        XCTAssertEqual(trasher.trashed, [transcriptItem.paths[0]])
+        // Worktree first (scan order), then the old transcript to the (fake) Trash; the recent one untouched.
+        XCTAssertEqual(trasher.trashed, [s.worktree.path, transcriptItem.paths[0]])
         XCTAssertFalse(FileManager.default.fileExists(atPath: transcriptItem.paths[0]))
         XCTAssertTrue(FileManager.default.fileExists(atPath: s.recent.path))
     }
@@ -114,7 +134,7 @@ final class AILeftoversJobRunTests: XCTestCase {
 
         let scan = try await job.scan()
         let wtItem = try XCTUnwrap(scan.allItems.first { $0.id == s.worktree.path })
-        XCTAssertTrue(wtItem.selectedByDefault)
+        XCTAssertTrue(wtItem.selectable)
 
         // The user (or another process) edits the worktree between scan and run.
         try Fixture.write("new work\n", to: s.worktree.appendingPathComponent("unsaved.txt"))
@@ -210,5 +230,73 @@ final class AILeftoversJobRunTests: XCTestCase {
         let run = try XCTUnwrap(result)
         XCTAssertEqual(run.itemCount, 0)
         XCTAssertFalse(run.problems.isEmpty)
+    }
+
+    func testWorktreeGoesToTrashWithItsIgnoredFiles() async throws {
+        let s = try await makeScenario()
+        // Git-ignored data that `git status` never reports, as in a real agent worktree.
+        try Fixture.write(".env\n", to: s.repo.appendingPathComponent(".git/info/exclude"))
+        try Fixture.write("SECRET=1\n", to: s.worktree.appendingPathComponent(".env"))
+        try Fixture.backdate(s.worktree, days: 60)
+        let trasher = FakeTrasher(folder: trashDir)
+        let job = makeJob(cwds: ScriptedCwds([[]]), trasher: trasher)
+
+        let scan = try await job.scan()
+        let wtItem = try XCTUnwrap(scan.allItems.first { $0.id == s.worktree.path })
+        XCTAssertTrue(wtItem.selectable)
+        let (result, _) = try await collect(job, selection: [wtItem.id], scan: scan)
+
+        let run = try XCTUnwrap(result)
+        XCTAssertEqual(run.problems, [])
+        XCTAssertEqual(run.itemCount, 1)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: s.worktree.path))
+        // The ignored file survives in the Trash, not deleted by git.
+        XCTAssertEqual(try String(contentsOf: trashDir.appendingPathComponent("0-clean/.env"), encoding: .utf8), "SECRET=1\n")
+        let list = try await Fixture.git(["worktree", "list", "--porcelain"], in: s.repo)
+        XCTAssertFalse(list.contains(s.worktree.path))
+    }
+
+    func testOpenClaudeProjectIsSkippedAtRunTime() async throws {
+        let s = try await makeScenario()
+        let trasher = FakeTrasher(folder: trashDir)
+        // Nothing open at scan time; a session starts inside the project folder before the run.
+        let projectCwd = home.appendingPathComponent("dev/Foo/src").path
+        let job = makeJob(cwds: ScriptedCwds([[], [projectCwd]]), trasher: trasher)
+
+        let scan = try await job.scan()
+        let transcriptItem = try XCTUnwrap(scan.allItems.first { $0.id.hasPrefix("claude-transcripts:") })
+        XCTAssertTrue(transcriptItem.selectable)
+        let (result, _) = try await collect(job, selection: [transcriptItem.id], scan: scan)
+
+        let run = try XCTUnwrap(result)
+        XCTAssertEqual(run.itemCount, 0)
+        XCTAssertTrue(run.problems.first?.contains("In use by a running process") ?? false, run.problems.description)
+        XCTAssertEqual(trasher.trashed, [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: s.transcript.path))
+    }
+
+    func testCancelledRunReturnsWhatWasAlreadyMoved() async throws {
+        // Two old, default-ticked rows: Claude file history and shell snapshots.
+        let session = home.appendingPathComponent(".claude/file-history/session-1", isDirectory: true)
+        try Fixture.write("old\n", to: session.appendingPathComponent("v1.txt"))
+        try Fixture.backdate(session, days: 60)
+        let snapshot = home.appendingPathComponent(".claude/shell-snapshots/snap-1.sh")
+        try Fixture.write("export X=1\n", to: snapshot)
+        try Fixture.backdate(snapshot, days: 60)
+
+        let trasher = CancelAfterFirstTrash(inner: FakeTrasher(folder: trashDir))
+        let job = makeJob(cwds: ScriptedCwds([[]]), trasher: trasher)
+        let scan = try await job.scan()
+        let selection = scan.defaultSelection
+        XCTAssertEqual(selection.count, 2)
+
+        // Runs in its own task so the cancel hits only this run.
+        let execution = Task { try await job.execute(selection: selection, scan: scan, emit: { _ in }) }
+        let run = try await execution.value
+
+        XCTAssertEqual(trasher.inner.trashed.count, 1)
+        XCTAssertEqual(run.itemCount, 1)
+        XCTAssertGreaterThan(run.freedBytes ?? 0, 0)
+        XCTAssertTrue(run.problems.contains { $0.hasPrefix("Stopped by you after 1 items") }, run.problems.description)
     }
 }

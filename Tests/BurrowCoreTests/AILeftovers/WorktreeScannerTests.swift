@@ -62,7 +62,7 @@ final class AILeftoversWorktreeScannerTests: XCTestCase {
         let group = try XCTUnwrap(maybeGroup)
         XCTAssertEqual(group.id, "agent-worktrees")
 
-        let byName = Dictionary(uniqueKeysWithValues: group.items.map { ($0.detail ?? "", $0) })
+        let byName = Dictionary(uniqueKeysWithValues: group.items.map { ($0.id, $0) })
         let clean = try XCTUnwrap(byName.first { $0.key.hasSuffix("/wts/clean") }?.value)
         let dirty = try XCTUnwrap(byName.first { $0.key.hasSuffix("/wts/dirty") }?.value)
         let unmerged = try XCTUnwrap(byName.first { $0.key.hasSuffix("/wts/unmerged") }?.value)
@@ -70,8 +70,10 @@ final class AILeftoversWorktreeScannerTests: XCTestCase {
 
         XCTAssertEqual(clean.title, "Repo / clean")
         XCTAssertTrue(clean.selectable)
-        XCTAssertTrue(clean.selectedByDefault)
+        // Clean and old, but never ticked by default: git-ignored data inside is not visible to the checks.
+        XCTAssertFalse(clean.selectedByDefault)
         XCTAssertNil(clean.note)
+        XCTAssertTrue(clean.detail?.contains("git-ignored files inside go to the Trash too") ?? false)
 
         XCTAssertFalse(dirty.selectable)
         XCTAssertFalse(dirty.selectedByDefault)
@@ -85,7 +87,37 @@ final class AILeftoversWorktreeScannerTests: XCTestCase {
         XCTAssertFalse(recent.selectedByDefault)
         XCTAssertEqual(recent.note, "Changed recently (within the age threshold)")
 
-        XCTAssertEqual(group.items.filter(\.selectedByDefault).map(\.id), [clean.id])
+        XCTAssertEqual(group.items.filter(\.selectedByDefault), [])
+    }
+
+    func testUntrackedFilesCountAsDirtyEvenWhenGitHidesThem() async throws {
+        let f = try await makeFixtureWorktrees()
+        // A user config that hides untracked files from `git status`.
+        try await Fixture.git(["config", "status.showUntrackedFiles", "no"], in: f.repo)
+        try Fixture.write("notes\n", to: f.clean.appendingPathComponent("notes.txt"))
+
+        let dirty = await WorktreeScanner(config: config(), shell: RoutingShell()).isDirty(f.clean.path)
+        XCTAssertTrue(dirty)
+    }
+
+    func testWorktreeInUseThroughSymlinkedFolderIsDetected() async throws {
+        // ~/dev is a symlink to a folder elsewhere (for example on an external drive). lsof reports the real path.
+        let real = home.appendingPathComponent("vol/dev", isDirectory: true)
+        try FileManager.default.createDirectory(at: real, withIntermediateDirectories: true)
+        try FileManager.default.createSymbolicLink(at: home.appendingPathComponent("dev"), withDestinationURL: real)
+        let repo = try await Fixture.makeRepo(home: home)
+        let wt = home.appendingPathComponent("dev/wts/clean", isDirectory: true)
+        try await Fixture.addWorktree(repo: repo, at: wt, branch: "clean-branch")
+        try Fixture.backdate(wt, days: 60)
+
+        let realWorktree = real.appendingPathComponent("wts/clean").path
+        let shell = RoutingShell(lsofOutput: "p4242\nfcwd\nn\(realWorktree)/src\n")
+        let cwds = try await LsofCwdProvider(shell: shell).currentWorkingDirectories()
+        let maybeGroup = await WorktreeScanner(config: config(), shell: shell).scanGroup(cwds: cwds)
+        let group = try XCTUnwrap(maybeGroup)
+        let item = try XCTUnwrap(group.items.first { $0.id == realWorktree })
+        XCTAssertFalse(item.selectable)
+        XCTAssertEqual(item.note, "In use by a running process")
     }
 
     func testWorktreeInUseByProcessIsUnselectable() async throws {
@@ -93,7 +125,7 @@ final class AILeftoversWorktreeScannerTests: XCTestCase {
         let shell = RoutingShell(lsofOutput: "p4242\nfcwd\nn\(f.clean.path)/src\n")
         let maybeGroup = await WorktreeScanner(config: config(), shell: shell).scanGroup(cwds: [f.clean.path + "/src"])
         let group = try XCTUnwrap(maybeGroup)
-        let clean = try XCTUnwrap(group.items.first { $0.detail == f.clean.path })
+        let clean = try XCTUnwrap(group.items.first { $0.id == f.clean.path })
         XCTAssertFalse(clean.selectable)
         XCTAssertFalse(clean.selectedByDefault)
         XCTAssertEqual(clean.note, "In use by a running process")
@@ -111,9 +143,10 @@ final class AILeftoversWorktreeScannerTests: XCTestCase {
 
         let maybeGroup = await WorktreeScanner(config: config(), shell: RoutingShell()).scanGroup(cwds: [])
         let group = try XCTUnwrap(maybeGroup)
-        let oldItem = try XCTUnwrap(group.items.first { $0.detail == old.path })
-        let youngItem = try XCTUnwrap(group.items.first { $0.detail == young.path })
-        XCTAssertTrue(oldItem.selectedByDefault)
+        let oldItem = try XCTUnwrap(group.items.first { $0.id == old.path })
+        let youngItem = try XCTUnwrap(group.items.first { $0.id == young.path })
+        XCTAssertTrue(oldItem.selectable)
+        XCTAssertFalse(oldItem.selectedByDefault)
         XCTAssertFalse(youngItem.selectable)
         XCTAssertFalse(youngItem.selectedByDefault)
     }

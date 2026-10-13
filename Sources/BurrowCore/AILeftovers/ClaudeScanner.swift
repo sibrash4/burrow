@@ -39,6 +39,8 @@ public enum ClaudeScanner {
                 bytes += Int64((try? file.resourceValues(forKeys: [.totalFileAllocatedSizeKey]).totalFileAllocatedSize) ?? 0)
             }
             guard !paths.isEmpty else { continue }
+            // An open session keeps its whole project folder, so the row is shown but cannot be ticked.
+            let inUse = projectInUseReason(folder: project.path, cwds: gate.cwds, now: config.now)
             items.append(ScanItem(
                 id: "claude-transcripts:\(project.lastPathComponent)",
                 title: "Transcripts: \(displayPath(forProjectFolder: project.lastPathComponent, config: config))",
@@ -46,12 +48,41 @@ public enum ClaudeScanner {
                 bytes: bytes,
                 count: paths.count,
                 paths: paths,
-                selectable: true,
+                selectable: inUse == nil,
                 selectedByDefault: false,
-                note: "Needed for claude --resume"
+                note: inUse ?? "Needed for claude --resume"
             ))
         }
         return items
+    }
+
+    /// Why a Claude project folder must not be trashed right now, or nil. A running process whose cwd is the
+    /// project folder or inside it, or any transcript written in the last 24 hours, means it may be open.
+    static func projectInUseReason(folder: String, cwds: [String], now: Date) -> String? {
+        let folderKey = encodedKey(URL(fileURLWithPath: folder).lastPathComponent)
+        let inUse = cwds.contains { cwd in
+            let key = encodedKey(cwd)
+            return key == folderKey || key.hasPrefix(folderKey + "-")
+        }
+        if inUse { return "In use by a running process" }
+
+        let since = now.addingTimeInterval(-24 * 60 * 60)
+        let files = (try? FileManager.default.contentsOfDirectory(
+            at: URL(fileURLWithPath: folder), includingPropertiesForKeys: [.contentModificationDateKey], options: [.skipsHiddenFiles]
+        )) ?? []
+        let changedToday = files.contains { file in
+            guard file.pathExtension == "jsonl",
+                  let modified = try? file.resourceValues(forKeys: [.contentModificationDateKey]).contentModificationDate
+            else { return false }
+            return modified > since
+        }
+        return changedToday ? "Changed in the last 24 hours, so it may be open" : nil
+    }
+
+    /// Claude Code names a project folder after its path with every symbol turned into "-". That name cannot be
+    /// decoded reliably (folder names contain "-"), so the cwd is encoded the same way and compared instead.
+    static func encodedKey(_ path: String) -> String {
+        String(path.map { $0.isLetter || $0.isNumber ? $0 : "-" })
     }
 
     /// One row covering the old entries directly inside `dir`. nil when there are none.
