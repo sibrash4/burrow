@@ -16,13 +16,7 @@ enum Entry {
 }
 
 struct BurrowApp: App {
-    @State private var model = AppModel(
-        jobs: MockData.jobs(),
-        previewLeftovers: { item in
-            try await Task.sleep(for: .milliseconds(350))
-            return MockData.leftovers(for: item)
-        }
-    )
+    @State private var model = AppWiring.makeModel()
 
     var body: some Scene {
         Window("Burrow", id: "main") {

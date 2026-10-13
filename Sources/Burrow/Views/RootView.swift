@@ -52,13 +52,18 @@ struct SidebarView: View {
         }
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
-            if case .versionMismatch(let version) = model.moleStatus {
-                Label(BurrowError.unsupportedMoleVersion(version).errorDescription ?? "", systemImage: "info.circle")
-                    .font(RowType.secondary)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(12)
+            VStack(alignment: .leading, spacing: 8) {
+                if case .versionMismatch(let version) = model.moleStatus {
+                    Label(BurrowError.unsupportedMoleVersion(version).errorDescription ?? "", systemImage: "info.circle")
+                }
+                if let notice = model.startupNotice {
+                    Label(notice, systemImage: "info.circle")
+                }
             }
+            .font(RowType.secondary)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(model.moleStatus.isVersionMismatch || model.startupNotice != nil ? 12 : 0)
         }
     }
 }

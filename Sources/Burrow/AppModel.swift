@@ -8,6 +8,13 @@ enum MoleStatus: Equatable {
     case versionMismatch(String)
 }
 
+extension MoleStatus {
+    var isVersionMismatch: Bool {
+        if case .versionMismatch = self { return true }
+        return false
+    }
+}
+
 enum Phase: Equatable {
     case idle, scanning, review, confirming, running, done, failed
 }
@@ -33,6 +40,8 @@ struct JobState {
 final class AppModel {
     var selectedKind: JobKind = .clean
     var moleStatus: MoleStatus
+    /// One line shown in the sidebar footer, e.g. after crash recovery. nil when there is nothing to say.
+    var startupNotice: String?
     private(set) var states: [JobKind: JobState] = [:]
 
     @ObservationIgnored private var jobs: [JobKind: MoleJob]
@@ -121,6 +130,8 @@ final class AppModel {
 
     func alwaysKeep(_ item: ScanItem, in kind: JobKind) {
         setSelected([item.id], false, in: kind)
+        // A whitelist entry only means something to `mo clean`.
+        guard kind == .clean else { return }
         Task { await alwaysKeepHandler(item) }
     }
 
