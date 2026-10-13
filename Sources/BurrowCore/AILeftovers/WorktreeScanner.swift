@@ -52,7 +52,10 @@ public struct WorktreeScanner: Sendable {
     private func walk(_ dir: URL, depth: Int, into found: inout [String]) {
         guard depth <= Self.maxDepth else { return }
         let fm = FileManager.default
-        guard let children = try? fm.contentsOfDirectory(at: dir, includingPropertiesForKeys: [.isDirectoryKey], options: []) else { return }
+        // List the real folder: the URL-based listing returns nothing for a symlinked folder (~/dev -> /Volumes/x/dev).
+        // Found worktrees are then reported by real path, the same spelling lsof uses.
+        let real = URL(fileURLWithPath: PathCheck.resolved(dir.path), isDirectory: true)
+        guard let children = try? fm.contentsOfDirectory(at: real, includingPropertiesForKeys: [.isDirectoryKey], options: []) else { return }
         for child in children {
             let name = child.lastPathComponent
             if Self.skipNames.contains(name) { continue }
@@ -90,7 +93,8 @@ public struct WorktreeScanner: Sendable {
         let main = Self.mainRepo(ofWorktree: normalized)
         let stats = FolderStats.measure(URL(fileURLWithPath: normalized))
 
-        let usingCwd = cwds.first { PathCheck.isInside($0, normalized) }
+        let real = PathCheck.resolved(normalized)
+        let usingCwd = cwds.first { PathCheck.isInside($0, real) }
         let dirty = await isDirty(normalized)
         let unpushed = await hasUnpushedCommits(normalized)
 
@@ -107,8 +111,10 @@ public struct WorktreeScanner: Sendable {
     }
 
     /// True when `git status` shows changes or fails. Failure is treated as unsafe.
+    /// Untracked files are always listed, even when the user's git config hides them.
     func isDirty(_ path: String) async -> Bool {
-        guard let result = try? await shell.run(ExternalTools.git, ["-C", path, "status", "--porcelain"], timeout: 60) else { return true }
+        let args = ["-C", path, "-c", "status.showUntrackedFiles=all", "status", "--porcelain"]
+        guard let result = try? await shell.run(ExternalTools.git, args, timeout: 60) else { return true }
         return result.exitCode != 0 || !result.stdout.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
@@ -147,11 +153,13 @@ public struct WorktreeScanner: Sendable {
             items.append(ScanItem(
                 id: a.path,
                 title: "\(repoName) / \(wtName)",
-                detail: a.path,
+                // git-ignored files (.env, .venv, local databases) are not checked, so say where they end up.
+                detail: "\(a.path) · git-ignored files inside go to the Trash too",
                 bytes: a.bytes,
                 paths: [a.path],
                 selectable: reason == nil,
-                selectedByDefault: reason == nil,
+                // Worktrees hold git-ignored data that no status check sees, so they are never ticked by default.
+                selectedByDefault: false,
                 note: reason
             ))
         }

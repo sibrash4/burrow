@@ -33,6 +33,8 @@ final class AILeftoversScanTests: XCTestCase {
         try Fixture.write("{}\n", to: oldFile)
         try Fixture.write("{}\n", to: newFile)
         try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86400)], ofItemAtPath: oldFile.path)
+        // Two days old: not offered, and outside the 24-hour window that keeps a whole folder in use.
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-2 * 86400)], ofItemAtPath: newFile.path)
 
         // A second project with only recent transcripts should produce no row.
         let other = home.appendingPathComponent(".claude/projects/\(encodedProject("dev-Bar"))", isDirectory: true)
@@ -47,6 +49,48 @@ final class AILeftoversScanTests: XCTestCase {
         XCTAssertFalse(item.selectedByDefault)
         XCTAssertTrue(item.selectable)
         XCTAssertEqual(item.note, "Needed for claude --resume")
+    }
+
+    func testOpenSessionKeepsItsProjectFolderUnselectable() throws {
+        let project = home.appendingPathComponent(".claude/projects/\(encodedProject("dev-Foo"))", isDirectory: true)
+        let oldFile = project.appendingPathComponent("aaaa.jsonl")
+        try Fixture.write("{}\n", to: oldFile)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86400)], ofItemAtPath: oldFile.path)
+
+        // A shell open in a subfolder of the project, on a transcript that has not been written to for 60 days.
+        let openCwd = home.appendingPathComponent("dev/Foo/src").path
+        let gate = SafetyGate(config: config, cwds: [openCwd])
+        let item = try XCTUnwrap(ClaudeScanner.scanGroup(config: config, gate: gate)?.items.first)
+        XCTAssertFalse(item.selectable)
+        XCTAssertFalse(item.selectedByDefault)
+        XCTAssertEqual(item.note, "In use by a running process")
+        XCTAssertEqual(item.paths, [oldFile.path])
+    }
+
+    func testNonAsciiFolderNameIsEncodedLikeClaudeDoes() throws {
+        // Claude turns every non-ASCII-alphanumeric character into "-", so "Café" is stored as "Caf-".
+        XCTAssertEqual(ClaudeScanner.encodedKey("/Users/x/dev/Café"), "-Users-x-dev-Caf-")
+        let project = home.appendingPathComponent(".claude/projects/-Users-x-dev-Caf-", isDirectory: true)
+        let oldFile = project.appendingPathComponent("aaaa.jsonl")
+        try Fixture.write("{}\n", to: oldFile)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86400)], ofItemAtPath: oldFile.path)
+        let gate = SafetyGate(config: config, cwds: ["/Users/x/dev/Café/src"])
+        let item = try XCTUnwrap(ClaudeScanner.scanGroup(config: config, gate: gate)?.items.first)
+        XCTAssertFalse(item.selectable)
+        XCTAssertEqual(item.note, "In use by a running process")
+    }
+
+    func testTranscriptWrittenInLastDayKeepsProjectFolderUnselectable() throws {
+        let project = home.appendingPathComponent(".claude/projects/\(encodedProject("dev-Foo"))", isDirectory: true)
+        let oldFile = project.appendingPathComponent("aaaa.jsonl")
+        let todayFile = project.appendingPathComponent("bbbb.jsonl")
+        try Fixture.write("{}\n", to: oldFile)
+        try Fixture.write("{}\n", to: todayFile)
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-60 * 86400)], ofItemAtPath: oldFile.path)
+
+        let item = try XCTUnwrap(ClaudeScanner.scanGroup(config: config, gate: gate)?.items.first)
+        XCTAssertFalse(item.selectable)
+        XCTAssertEqual(item.note, "Changed in the last 24 hours, so it may be open")
     }
 
     func testClaudeFileHistoryAndSnapshotsAreDefaultTicked() throws {

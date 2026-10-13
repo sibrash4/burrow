@@ -71,7 +71,7 @@ extension JobKind {
         case .purge: "Build folders are deleted and can be rebuilt."
         case .installers: "Installer files are deleted."
         case .uninstall: "Apps go to the Trash."
-        case .aiLeftovers: "Clean worktrees are removed with git. Transcripts and model caches go to the Trash."
+        case .aiLeftovers: "Ticked worktrees, transcripts and model caches go to the Trash. Worktrees include their git-ignored files."
         }
     }
 
