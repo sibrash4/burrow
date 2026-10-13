@@ -38,6 +38,8 @@ v1 jobs, all via `mo`:
 - **Installers**: leftover `.dmg`, `.pkg`, `.zip` installers (`mo installer`).
 - **Uninstall**: remove apps and their leftovers (`mo uninstall`), to Trash by default.
 
+- **AI leftovers** (not Mole): old agent git worktrees, Claude Code / Codex transcripts, model caches. The one place Burrow removes files itself: worktrees only via `git worktree remove` (no force; skipped if dirty, unpushed or in use), everything else only to the Trash. Items under 30 days old or in use are never offered; transcripts and models are unticked by default.
+
 Interaction: always preview, then let the user untick individual items, then confirm. Window app with a sidebar. No menu bar item, no scheduling, no auto-clean in v1.
 
 Constraints: no telemetry, no network calls. Never use `--permanent`. Do not use the Mole name or logo as Burrow's identity (Mole TRADEMARK.md); "a GUI for Mole" in descriptions is fine.
