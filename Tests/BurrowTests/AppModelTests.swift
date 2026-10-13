@@ -18,6 +18,49 @@ final class Recorder: @unchecked Sendable {
     var all: [String] { lock.lock(); defer { lock.unlock() }; return ids }
 }
 
+/// Behaves like an engine that is stopped: `run` registers the run, the stream ends at once when stopped,
+/// and the engine then takes `teardown` longer to put things back before it settles the run.
+struct TeardownJob: MoleJob {
+    var kind: JobKind
+    var teardown: Duration
+    func scan() async throws -> ScanResult {
+        ScanResult(kind: kind, groups: [ScanGroup(id: "g", title: "Group", items: [ScanItem(id: "a", title: "Item", bytes: 1_000)])])
+    }
+    func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
+        RunTeardown.shared.begin(kind)
+        let kind = kind, teardown = teardown
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                defer { RunTeardown.shared.end(kind, result: RunResult(freedBytes: 3_000_000_000, itemCount: 4, exitCode: -1, log: "")) }
+                _ = try? await Task.sleep(for: .seconds(30))
+                await Task.detached { try? await Task.sleep(for: teardown) }.value
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+}
+
+/// Emits `count` log lines and finishes with `result`.
+struct ScriptedJob: MoleJob {
+    var kind: JobKind
+    var count = 0
+    var result: RunResult?
+    func scan() async throws -> ScanResult {
+        ScanResult(kind: kind, groups: [ScanGroup(id: "g", title: "Group", items: [ScanItem(id: "a", title: "Item", bytes: 1_000)])])
+    }
+    func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
+        AsyncThrowingStream { continuation in
+            for n in 0..<count { continuation.yield(.line("line \(n)")) }
+            if let result { continuation.yield(.finished(result)) }
+            continuation.finish()
+        }
+    }
+}
+
+struct SaveFailed: LocalizedError {
+    var errorDescription: String? { "the whitelist is busy" }
+}
+
 @MainActor
 final class AppModelTests: XCTestCase {
     private func makeModel(step: Duration = .milliseconds(1), recorder: Recorder = Recorder()) -> AppModel {
@@ -112,8 +155,9 @@ final class AppModelTests: XCTestCase {
         model.confirmRun(.purge)
         XCTAssertEqual(model.state(.purge).phase, .running)
         model.cancelRun(.purge)
+        XCTAssertEqual(model.state(.purge).phase, .stopping)
+        await until(model, .purge, .failed)
         let state = model.state(.purge)
-        XCTAssertEqual(state.phase, .failed)
         XCTAssertTrue(state.wasCancelled)
         XCTAssertEqual(state.errorText, "Cancelled.")
     }
@@ -154,6 +198,158 @@ final class AppModelTests: XCTestCase {
         model.scan(.clean)
         await until(model, .clean, .review)
         XCTAssertGreaterThan(model.selectedCount(.clean), 0)
+    }
+
+    // MARK: Stop, scan and quit
+
+    func testStopShowsStoppingUntilTeardownAndKeepsWhatWasFreed() async {
+        var jobs: [JobKind: MoleJob] = [:]
+        jobs[.purge] = TeardownJob(kind: .purge, teardown: .milliseconds(300))
+        let model = AppModel(jobs: jobs)
+        model.scan(.purge)
+        await until(model, .purge, .review)
+        model.setSelected(["a"], true, in: .purge)
+        model.beginConfirm(.purge)
+        model.confirmRun(.purge)
+        model.cancelRun(.purge)
+        XCTAssertEqual(model.state(.purge).phase, .stopping)
+        // A new scan must wait until the stopped run has torn down.
+        model.scan(.purge)
+        XCTAssertEqual(model.state(.purge).phase, .stopping)
+        await until(model, .purge, .failed)
+        let state = model.state(.purge)
+        XCTAssertTrue(state.wasCancelled)
+        XCTAssertEqual(state.result?.freedBytes, 3_000_000_000)
+        XCTAssertFalse(RunTeardown.shared.isActive(.purge))
+    }
+
+    func testQuitWaitsForTheRunToTearDown() async {
+        var jobs: [JobKind: MoleJob] = [:]
+        jobs[.purge] = TeardownJob(kind: .purge, teardown: .milliseconds(300))
+        let model = AppModel(jobs: jobs)
+        model.scan(.purge)
+        await until(model, .purge, .review)
+        model.setSelected(["a"], true, in: .purge)
+        model.beginConfirm(.purge)
+        model.confirmRun(.purge)
+        XCTAssertTrue(model.hasActiveRun)
+        await model.stopAllAndWait()
+        XCTAssertFalse(RunTeardown.shared.isActive(.purge))
+        XCTAssertFalse(model.hasActiveRun)
+    }
+
+    func testScanCanBeCancelled() async {
+        let model = AppModel(jobs: [.clean: MockJob(kind: .clean, scanDelay: .seconds(5))])
+        model.scan(.clean)
+        XCTAssertEqual(model.state(.clean).phase, .scanning)
+        model.cancelScan(.clean)
+        let state = model.state(.clean)
+        XCTAssertEqual(state.phase, .failed)
+        XCTAssertTrue(state.wasCancelled)
+        XCTAssertEqual(state.errorText, BurrowError.cancelled.errorDescription)
+    }
+
+    func testScanGivesUpAfterTheTimeout() async {
+        let model = AppModel(jobs: [.clean: MockJob(kind: .clean, scanDelay: .seconds(5))], scanTimeout: .milliseconds(100))
+        model.scan(.clean)
+        await until(model, .clean, .failed)
+        XCTAssertEqual(model.state(.clean).errorText, BurrowError.timeout("mo clean --dry-run").errorDescription)
+        XCTAssertFalse(model.state(.clean).wasCancelled)
+    }
+
+    func testScanIsIgnoredWhileTheConfirmSheetIsUp() async {
+        let model = makeModel()
+        model.scan(.clean)
+        await until(model, .clean, .review)
+        model.beginConfirm(.clean)
+        let before = model.state(.clean).selection
+        model.scan(.clean)
+        XCTAssertEqual(model.state(.clean).phase, .confirming)
+        XCTAssertEqual(model.state(.clean).selection, before)
+    }
+
+    func testFailedRunKeepsWhatMoleReported() async {
+        let freed = RunResult(freedBytes: 4_000_000_000, exitCode: 1, log: "Mole exited")
+        let model = AppModel(jobs: [.purge: ScriptedJob(kind: .purge, result: freed)])
+        model.scan(.purge)
+        await until(model, .purge, .review)
+        model.setSelected(["a"], true, in: .purge)
+        model.beginConfirm(.purge)
+        model.confirmRun(.purge)
+        await until(model, .purge, .failed)
+        XCTAssertEqual(model.state(.purge).result?.freedBytes, 4_000_000_000)
+        XCTAssertFalse(model.state(.purge).wasCancelled)
+    }
+
+    func testLogRevisionKeepsCountingPastTheCap() async {
+        let model = AppModel(jobs: [.purge: ScriptedJob(kind: .purge, count: 2_100, result: RunResult(exitCode: 0, log: ""))])
+        model.scan(.purge)
+        await until(model, .purge, .review)
+        model.setSelected(["a"], true, in: .purge)
+        model.beginConfirm(.purge)
+        model.confirmRun(.purge)
+        await until(model, .purge, .done)
+        XCTAssertEqual(model.state(.purge).log.count, 2_000)
+        XCTAssertEqual(model.state(.purge).logRevision, 2_100)
+    }
+
+    // MARK: Selection and always keep
+
+    func testSelectAllWithinVisibleRowsOnly() async {
+        let model = makeModel()
+        model.scan(.clean)
+        await until(model, .clean, .review)
+        model.selectNone(.clean)
+        model.selectAll(.clean, within: ["clang", "brew"])
+        XCTAssertTrue(model.isSelected("clang", in: .clean))
+        XCTAssertTrue(model.isSelected("brew", in: .clean))
+        XCTAssertFalse(model.isSelected("xcode-dd", in: .clean))
+        model.selectNone(.clean, within: ["clang"])
+        XCTAssertFalse(model.isSelected("clang", in: .clean))
+        XCTAssertTrue(model.isSelected("brew", in: .clean))
+    }
+
+    func testFailedAlwaysKeepLeavesTheRowTickedAndSaysWhy() async {
+        let model = AppModel(jobs: [.clean: MockJob(kind: .clean, scanDelay: .zero)], alwaysKeep: { _ in throw SaveFailed() })
+        model.scan(.clean)
+        await until(model, .clean, .review)
+        let item = MockData.clean.allItems.first { $0.id == "clang" }!
+        model.alwaysKeep(item, in: .clean)
+        XCTAssertTrue(model.isSelected("clang", in: .clean))
+        let notice = model.state(.clean).keepError ?? ""
+        XCTAssertTrue(notice.contains("Clang module cache"))
+        XCTAssertTrue(notice.contains("the whitelist is busy"))
+    }
+
+    func testSuccessfulAlwaysKeepClearsTheError() async {
+        let model = AppModel(jobs: [.clean: MockJob(kind: .clean, scanDelay: .zero)], alwaysKeep: { _ in throw SaveFailed() })
+        model.scan(.clean)
+        await until(model, .clean, .review)
+        let item = MockData.clean.allItems.first { $0.id == "clang" }!
+        model.alwaysKeep(item, in: .clean)
+        XCTAssertNotNil(model.state(.clean).keepError)
+        let saved = AppModel(jobs: [.clean: MockJob(kind: .clean, scanDelay: .zero)], alwaysKeep: { _ in })
+        saved.scan(.clean)
+        await until(saved, .clean, .review)
+        saved.alwaysKeep(item, in: .clean)
+        XCTAssertNil(saved.state(.clean).keepError)
+        XCTAssertFalse(saved.isSelected("clang", in: .clean))
+    }
+
+    // MARK: Launch and copy
+
+    func testMoleCheckRunsAfterLaunchNotBeforeIt() async {
+        let model = AppModel(jobs: [:], moleStatus: .checking, locateMole: { .ready })
+        XCTAssertEqual(model.moleStatus, .checking)
+        await model.checkMole()
+        XCTAssertEqual(model.moleStatus, .ready)
+    }
+
+    func testConfirmCopySaysWhatReallyHappens() {
+        XCTAssertEqual(JobKind.clean.consequence(), "Caches and logs are deleted.")
+        XCTAssertEqual(JobKind.clean.consequence(trashIncluded: true), "Caches and logs are deleted. The Trash is emptied permanently.")
+        XCTAssertEqual(JobKind.uninstall.consequence(), "Apps go to the Trash. Running apps are quit first.")
+        XCTAssertTrue(JobKind.aiLeftovers.consequence().hasPrefix("Worktrees are removed with git, not the Trash."))
     }
 
     func testActionTitles() {

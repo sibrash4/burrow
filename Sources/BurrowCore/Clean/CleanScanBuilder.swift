@@ -6,7 +6,7 @@ public enum CleanScanBuilder {
     static let commandPrefix = "clean:cmd:"
     static let infoPrefix = "clean:info:"
     static let emptyPrefix = "clean:empty:"
-    static let trashID = "clean:.Trash"
+    public static let trashID = "clean:.Trash"
 
     public static func build(dryRun: CleanDryRun, list: CleanList, home: String, now: Date = .now) -> ScanResult {
         var accumulators: [String: Accumulator] = [:]

@@ -15,6 +15,8 @@ struct ConfirmSheet: View {
     var lines: [Line]
     var count: Int
     var bytes: Int64
+    /// Clean only: the Trash row is ticked, so the sheet has to say the Trash is emptied for good.
+    var trashIncluded = false
     var onCancel: () -> Void
     var onConfirm: () -> Void
 
@@ -24,7 +26,7 @@ struct ConfirmSheet: View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 4) {
                 Text(headline).font(.title3.weight(.semibold))
-                Text(kind.consequence + " Anything you unticked stays where it is.")
+                Text(kind.consequence(trashIncluded: trashIncluded) + " Anything you unticked stays where it is.")
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }

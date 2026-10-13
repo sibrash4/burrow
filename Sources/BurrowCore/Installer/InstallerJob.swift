@@ -47,7 +47,7 @@ public struct InstallerJob: MoleJob {
             args: runArguments, label: "Removing installers",
             checkConfirm: { InstallerParser.checkConfirm(screen: $0, wanted: items) },
             summarize: { InstallerParser.summarize(log: $0, exitCode: $1) })
-        return MenuJobRun.stream(spec: spec, wanted: items.map(\.id), launcher: launcher, driver: driver,
+        return MenuJobRun.stream(kind: kind, spec: spec, wanted: items.map(\.id), launcher: launcher, driver: driver,
                                  idleResult: RunResult(itemCount: 0, exitCode: 0, log: ""))
     }
 }

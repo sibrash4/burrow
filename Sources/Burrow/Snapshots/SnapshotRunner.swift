@@ -43,8 +43,9 @@ enum SnapshotRunner {
         window.isReleasedWhenClosed = false
         // Alpha 0 keeps the window invisible while still letting AppKit lay everything out.
         window.alphaValue = 0
+        // Known limit: a capture started from a terminal never becomes key or active, so controls draw in the
+        // inactive style (grey prominent button, grey selection). Activation and key-window overrides were tried.
         window.makeKeyAndOrderFront(nil)
-        spin(1.6)
         window.contentView?.layoutSubtreeIfNeeded()
         window.displayIfNeeded()
         spin(0.2)
@@ -80,6 +81,20 @@ enum SnapshotRunner {
 
     private static let keptRows: Set<ScanItem.ID> = ["zed-npm", "chrome-sw", "wallpaper", "next"]
 
+    /// The rows that 02 confirms. 04 reports the same selection, so the two screens agree on count and size.
+    private static func confirmedSelection() -> Set<ScanItem.ID> {
+        MockData.clean.defaultSelection.subtracting(keptRows)
+    }
+
+    private static func confirmLines(_ scan: ScanResult, _ selection: Set<ScanItem.ID>) -> [ConfirmSheet.Line] {
+        scan.groups.enumerated().compactMap { index, group -> ConfirmSheet.Line? in
+            let picked = group.items.filter { $0.selectable && selection.contains($0.id) }
+            guard !picked.isEmpty else { return nil }
+            return ConfirmSheet.Line(id: group.id, title: group.title, index: index, count: picked.count,
+                                     bytes: picked.reduce(0) { $0 + ($1.bytes ?? 0) })
+        }
+    }
+
     static func scenarios() -> [Scenario] {
         [
             Scenario(name: "01-clean-review") {
@@ -93,14 +108,11 @@ enum SnapshotRunner {
                 var s = reviewState(MockData.clean, off: keptRows)
                 s.phase = .review
                 m.preload(.clean, s)
-                let lines = MockData.clean.groups.enumerated().compactMap { index, group -> ConfirmSheet.Line? in
-                    let picked = group.items.filter { $0.selectable && s.selection.contains($0.id) }
-                    guard !picked.isEmpty else { return nil }
-                    return ConfirmSheet.Line(id: group.id, title: group.title, index: index, count: picked.count,
-                                             bytes: picked.reduce(0) { $0 + ($1.bytes ?? 0) })
-                }
+                let lines = confirmLines(MockData.clean, s.selection)
                 let count = lines.reduce(0) { $0 + $1.count }
                 let bytes = lines.reduce(0) { $0 + $1.bytes }
+                // A composite, not a real .sheet: a SwiftUI sheet is its own window, which the content-view
+                // capture below cannot include. The dimmed backdrop and ConfirmSheet are the sheet's own view.
                 return AnyView(ZStack {
                     RootView().environment(m)
                     Color.black.opacity(0.28)
@@ -114,6 +126,9 @@ enum SnapshotRunner {
                 var s = reviewState(MockData.clean)
                 s.phase = .running
                 s.status = "Cleaning Browsers"
+                // Mole gives no byte-level progress, so the real bar is indeterminate. A frozen mid-run value
+                // keeps the snapshot showing a visible fill.
+                s.progress = 0.4
                 s.log = [
                     "Cleaning User essentials",
                     "  Removed User app cache  1.2 GB",
@@ -126,10 +141,11 @@ enum SnapshotRunner {
             },
             Scenario(name: "04-done") {
                 let m = model()
-                var s = reviewState(MockData.clean)
+                var s = reviewState(MockData.clean, off: keptRows)
                 s.phase = .done
-                s.result = RunResult(freedBytes: 7_800_000_000, itemCount: 142,
-                                     problems: ["Chrome Service Worker: 1 file was in use and was skipped."],
+                let picked = MockData.clean.allItems.filter { $0.selectable && confirmedSelection().contains($0.id) }
+                s.result = RunResult(freedBytes: picked.reduce(0) { $0 + ($1.bytes ?? 0) }, itemCount: picked.count,
+                                     problems: ["Chrome cache: 1 file was in use and was skipped."],
                                      exitCode: 0, log: "Cleaning Browsers\n  Removed Chrome cache  642.2 MB")
                 m.preload(.clean, s)
                 return wrap(m)

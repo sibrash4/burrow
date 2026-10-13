@@ -2,6 +2,8 @@ import SwiftUI
 import BurrowCore
 
 enum MoleStatus: Equatable {
+    /// The launch check is still running. The normal screens show meanwhile.
+    case checking
     case ready
     case missing
     /// Found, but not the version Burrow was built for. Non-blocking.
@@ -16,7 +18,10 @@ extension MoleStatus {
 }
 
 enum Phase: Equatable {
-    case idle, scanning, review, confirming, running, done, failed
+    case idle, scanning, review, confirming, running
+    /// Stop was pressed. The run is over only once Mole has exited and the engine has put everything back.
+    case stopping
+    case done, failed
 }
 
 struct Leftover: Identifiable, Hashable, Sendable {
@@ -31,13 +36,22 @@ struct JobState {
     var selection: Set<ScanItem.ID> = []
     var status = ""
     var log: [String] = []
+    /// Counts every line ever logged. The log is capped, so its own count stops growing; this one keeps going.
+    var logRevision = 0
+    /// nil when Mole gives no byte-level progress, which is the normal case: the bar is then indeterminate.
+    var progress: Double?
     var result: RunResult?
     var errorText: String?
+    /// Shown above the list when "Always keep" could not be saved.
+    var keepError: String?
     var wasCancelled = false
 }
 
 @MainActor @Observable
 final class AppModel {
+    /// How long a stop may take to tear Mole down and restore files before the UI stops waiting.
+    static let stopLimit: TimeInterval = 20
+
     var selectedKind: JobKind = .clean
     var moleStatus: MoleStatus
     /// One line shown in the sidebar footer, e.g. after crash recovery. nil when there is nothing to say.
@@ -46,24 +60,28 @@ final class AppModel {
 
     @ObservationIgnored private var jobs: [JobKind: MoleJob]
     @ObservationIgnored private var tasks: [JobKind: Task<Void, Never>] = [:]
-    @ObservationIgnored private let alwaysKeepHandler: (ScanItem) async -> Void
+    @ObservationIgnored private var scanGeneration: [JobKind: Int] = [:]
+    @ObservationIgnored private let alwaysKeepHandler: (ScanItem) throws -> Void
     @ObservationIgnored private let leftoversHandler: (ScanItem) async throws -> [Leftover]
     @ObservationIgnored private let locateMole: () async -> MoleStatus
+    @ObservationIgnored private let scanTimeout: Duration
 
     private let maxLogLines = 2000
 
     init(
         jobs: [JobKind: MoleJob],
         moleStatus: MoleStatus = .ready,
-        alwaysKeep: @escaping (ScanItem) async -> Void = { _ in },
+        alwaysKeep: @escaping (ScanItem) throws -> Void = { _ in },
         previewLeftovers: @escaping (ScanItem) async throws -> [Leftover] = { _ in [] },
-        locateMole: @escaping () async -> MoleStatus = { .ready }
+        locateMole: @escaping () async -> MoleStatus = { .ready },
+        scanTimeout: Duration = .seconds(300)
     ) {
         self.jobs = jobs
         self.moleStatus = moleStatus
         self.alwaysKeepHandler = alwaysKeep
         self.leftoversHandler = previewLeftovers
         self.locateMole = locateMole
+        self.scanTimeout = scanTimeout
     }
 
     // MARK: Reading state
@@ -108,6 +126,11 @@ final class AppModel {
         return ByteSize.format(selectedBytes(kind))
     }
 
+    /// True while Mole may still be running, or a whitelist edit may still be open.
+    var hasActiveRun: Bool {
+        states.values.contains { $0.phase == .running || $0.phase == .stopping }
+    }
+
     // MARK: Selection
 
     func setSelected(_ ids: [ScanItem.ID], _ on: Bool, in kind: JobKind) {
@@ -123,16 +146,31 @@ final class AppModel {
         setSelected([id], !isSelected(id, in: kind), in: kind)
     }
 
-    func selectAll(_ kind: JobKind) { setSelected(selectableItems(kind).map(\.id), true, in: kind) }
-    func selectNone(_ kind: JobKind) { setSelected(selectableItems(kind).map(\.id), false, in: kind) }
+    /// `within` is the rows the user can see (the search filter applies), nil for every row.
+    func selectAll(_ kind: JobKind, within ids: [ScanItem.ID]? = nil) {
+        setSelected(ids ?? selectableItems(kind).map(\.id), true, in: kind)
+    }
+
+    func selectNone(_ kind: JobKind, within ids: [ScanItem.ID]? = nil) {
+        setSelected(ids ?? selectableItems(kind).map(\.id), false, in: kind)
+    }
 
     // MARK: Closures the integrator wires
 
+    /// Saves the row as kept, then unticks it. If the save fails the row stays ticked and the error is shown
+    /// above the list: a failed save must never look like a kept item.
     func alwaysKeep(_ item: ScanItem, in kind: JobKind) {
-        setSelected([item.id], false, in: kind)
         // A whitelist entry only means something to `mo clean`.
-        guard kind == .clean else { return }
-        Task { await alwaysKeepHandler(item) }
+        if kind == .clean {
+            do {
+                try alwaysKeepHandler(item)
+            } catch {
+                update(kind) { $0.keepError = "Couldn't keep \(item.title): \(Self.message(for: error)). It is still ticked." }
+                return
+            }
+        }
+        update(kind) { $0.keepError = nil }
+        setSelected([item.id], false, in: kind)
     }
 
     func leftovers(for item: ScanItem) async throws -> [Leftover] {
@@ -140,21 +178,33 @@ final class AppModel {
     }
 
     func recheckMole() {
-        Task { moleStatus = await locateMole() }
+        Task { await checkMole() }
+    }
+
+    /// Runs the Mole check off the main thread. Called at launch and from "Check again".
+    func checkMole() async {
+        moleStatus = await locateMole()
     }
 
     // MARK: Phase transitions
 
     func scan(_ kind: JobKind) {
         guard let job = jobs[kind] else { return }
-        let phase = state(kind).phase
-        guard phase != .scanning, phase != .running else { return }
+        // Nothing starts while a run is going or stopping, or while the confirm sheet is up (Cmd+R reaches here too).
+        switch state(kind).phase {
+        case .scanning, .running, .stopping, .confirming: return
+        case .idle, .review, .done, .failed: break
+        }
         tasks[kind]?.cancel()
         var s = state(kind)
         s.phase = .scanning
         s.errorText = nil
+        s.keepError = nil
         s.wasCancelled = false
         states[kind] = s
+
+        let generation = (scanGeneration[kind] ?? 0) + 1
+        scanGeneration[kind] = generation
         tasks[kind] = Task { [weak self] in
             do {
                 let result = try await job.scan()
@@ -164,6 +214,24 @@ final class AppModel {
                 guard !Task.isCancelled else { return }
                 self?.fail(kind, error)
             }
+        }
+        // A scan that never comes back would leave the screen spinning forever: give up after `scanTimeout`.
+        let limit = scanTimeout
+        Task { [weak self] in
+            try? await Task.sleep(for: limit)
+            guard let self, self.scanGeneration[kind] == generation, self.state(kind).phase == .scanning else { return }
+            self.tasks[kind]?.cancel()
+            self.fail(kind, BurrowError.timeout("mo \(kind.rawValue) --dry-run"))
+        }
+    }
+
+    func cancelScan(_ kind: JobKind) {
+        guard state(kind).phase == .scanning else { return }
+        tasks[kind]?.cancel()
+        update(kind) {
+            $0.phase = .failed
+            $0.wasCancelled = true
+            $0.errorText = BurrowError.cancelled.errorDescription
         }
     }
 
@@ -196,11 +264,14 @@ final class AppModel {
             $0.log = []
             $0.result = nil
             $0.errorText = nil
+            $0.progress = nil
         }
+        // Created here, not inside the task, so the engine has registered the run before any Stop can arrive.
+        let events = job.run(selection: selection, from: scan)
         tasks[kind] = Task { [weak self] in
             do {
                 var finished: RunResult?
-                for try await event in job.run(selection: selection, from: scan) {
+                for try await event in events {
                     guard let self else { return }
                     switch event {
                     case .line(let line): self.appendLog(kind, line)
@@ -221,8 +292,31 @@ final class AppModel {
         guard state(kind).phase == .running else { return }
         tasks[kind]?.cancel()
         update(kind) {
+            $0.phase = .stopping
+            $0.status = "Stopping"
+        }
+        Task { [weak self] in
+            await RunTeardown.shared.waitUntilIdle(kind, timeout: Self.stopLimit)
+            self?.finishStop(kind)
+        }
+    }
+
+    /// Quit path: stops every run that is still going, and returns once each one has torn down.
+    func stopAllAndWait() async {
+        for kind in JobKind.allCases where state(kind).phase == .running { cancelRun(kind) }
+        for kind in JobKind.allCases where state(kind).phase == .stopping {
+            await RunTeardown.shared.waitUntilIdle(kind, timeout: Self.stopLimit)
+        }
+    }
+
+    private func finishStop(_ kind: JobKind) {
+        guard state(kind).phase == .stopping else { return }
+        // What the engine got done before it stopped, so the stopped screen can say what was already removed.
+        let partial = RunTeardown.shared.takeResult(kind)
+        update(kind) {
             $0.phase = .failed
             $0.wasCancelled = true
+            $0.result = partial
             $0.errorText = BurrowError.cancelled.errorDescription
         }
     }
@@ -241,16 +335,20 @@ final class AppModel {
 
     private func fail(_ kind: JobKind, _ error: Error) {
         if case BurrowError.moleNotFound = error { moleStatus = .missing }
-        let text = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         update(kind) {
             $0.phase = .failed
-            $0.errorText = text
+            $0.errorText = Self.message(for: error)
         }
+    }
+
+    static func message(for error: Error) -> String {
+        (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
     }
 
     private func appendLog(_ kind: JobKind, _ line: String) {
         update(kind) {
             $0.log.append(line)
+            $0.logRevision += 1
             if $0.log.count > maxLogLines { $0.log.removeFirst($0.log.count - maxLogLines) }
         }
     }

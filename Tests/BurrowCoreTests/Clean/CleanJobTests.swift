@@ -33,6 +33,37 @@ final class CleanJobTests: TempDirTestCase {
         return selected
     }
 
+    /// Stop during a real run: Mole is terminated and waited for, the whitelist is put back, and the
+    /// summary Mole had printed is kept for the stopped screen.
+    func testStopDuringRunKeepsWhatMolePrintedAndRestoresTheWhitelist() async throws {
+        let session = FakeSession(chunks: [
+            "Cleaning User essentials\n",
+            "Cleanup complete\nTracked cleanup: Items cleaned: 3 | 2.5GB\n",
+        ], neverExits: true)
+        let (job, _, _) = try setUpJob(session: session, whitelistContent: original)
+        let scan = try await job.scan()
+        let selection = try selection(scan, without: ["Google (Chrome) cache"])
+
+        let stream = job.run(selection: selection, from: scan)
+        let consumer = Task { () -> RunResult? in
+            var finished: RunResult?
+            do { for try await event in stream { if case .finished(let result) = event { finished = result } } } catch {}
+            return finished
+        }
+        try await Task.sleep(nanoseconds: 300_000_000)
+        consumer.cancel()
+        _ = await consumer.value
+        await RunTeardown.shared.waitUntilIdle(.clean, timeout: 10)
+
+        XCTAssertFalse(RunTeardown.shared.isActive(.clean))
+        XCTAssertTrue(session.terminated)
+        XCTAssertEqual(try Data(contentsOf: whitelist), original)
+        let partial = try XCTUnwrap(RunTeardown.shared.takeResult(.clean))
+        XCTAssertEqual(partial.freedBytes, 2_500_000_000)
+        XCTAssertEqual(partial.itemCount, 3)
+        XCTAssertTrue(partial.problems.contains("Stopped before Mole finished."))
+    }
+
     // MARK: Scan
 
     func testScanRunsDryRunAndBuildsRows() async throws {

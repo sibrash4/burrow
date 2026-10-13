@@ -64,14 +64,16 @@ extension JobKind {
         }
     }
 
-    /// Plain-words consequence shown in the confirm sheet.
-    var consequence: String {
+    /// Plain-words consequence shown in the confirm sheet. Says what really happens to each kind of row.
+    func consequence(trashIncluded: Bool = false) -> String {
         switch self {
-        case .clean: "Caches and logs are deleted."
+        case .clean:
+            trashIncluded ? "Caches and logs are deleted. The Trash is emptied permanently." : "Caches and logs are deleted."
         case .purge: "Build folders are deleted and can be rebuilt."
         case .installers: "Installer files are deleted."
-        case .uninstall: "Apps go to the Trash."
-        case .aiLeftovers: "Clean worktrees are removed with git. Transcripts and model caches go to the Trash."
+        case .uninstall: "Apps go to the Trash. Running apps are quit first."
+        // Worktrees are removed with git, which deletes them outright; only transcripts and models use the Trash.
+        case .aiLeftovers: "Worktrees are removed with git, not the Trash. Transcripts and model caches go to the Trash."
         }
     }
 

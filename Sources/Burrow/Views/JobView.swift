@@ -23,6 +23,7 @@ struct JobView: View {
                     lines: confirmLines(state),
                     count: model.selectedCount(kind),
                     bytes: model.selectedBytes(kind),
+                    trashIncluded: state.selection.contains(CleanScanBuilder.trashID),
                     onCancel: { model.cancelConfirm(kind) },
                     onConfirm: { model.confirmRun(kind) }
                 )
@@ -46,6 +47,9 @@ struct JobView: View {
                 ProgressView()
                 Text("Scanning").font(.title3)
                 Text("Mole is looking. Nothing is removed during a scan.").foregroundStyle(.secondary)
+                Button("Cancel") { model.cancelScan(kind) }
+                    .keyboardShortcut(.cancelAction)
+                    .padding(.top, 8)
             }
         case .review, .confirming:
             if let scan = state.scan, !scan.allItems.isEmpty {
@@ -53,12 +57,14 @@ struct JobView: View {
             } else {
                 ContentUnavailableView(kind.emptyTitle, systemImage: "checkmark.circle", description: Text(kind.emptyMessage))
             }
-        case .running:
-            RunningView(status: state.status, log: state.log, onCancel: { model.cancelRun(kind) })
+        case .running, .stopping:
+            RunningView(status: state.status, log: state.log, logRevision: state.logRevision, progress: state.progress,
+                        stopping: state.phase == .stopping, onStop: { model.cancelRun(kind) })
         case .done:
             DoneView(kind: kind, result: state.result, onAgain: { model.scan(kind) })
         case .failed:
-            FailedView(text: state.errorText ?? "Something went wrong.", cancelled: state.wasCancelled, onRetry: { model.scan(kind) })
+            FailedView(text: state.errorText ?? "Something went wrong.", cancelled: state.wasCancelled,
+                       result: state.result, onRetry: { model.scan(kind) })
         }
     }
 
@@ -70,7 +76,7 @@ struct JobView: View {
                 Label(state.scan == nil ? "Scan" : "Rescan", systemImage: "arrow.clockwise")
             }
             .help("Scan again (\u{2318}R)")
-            .disabled(state.phase == .scanning || state.phase == .running || state.phase == .confirming)
+            .disabled(state.phase == .scanning || state.phase == .running || state.phase == .stopping || state.phase == .confirming)
 
             if state.phase == .review || state.phase == .confirming, !(state.scan?.allItems.isEmpty ?? true) {
                 let count = model.selectedCount(kind)
@@ -94,6 +100,7 @@ struct JobView: View {
             return "\(ByteSize.format(model.totalBytes(kind))) found \u{00B7} scanned \(time)"
         case .scanning: return "Scanning"
         case .running: return "Working"
+        case .stopping: return "Stopping"
         default: return kind.subtitle
         }
     }

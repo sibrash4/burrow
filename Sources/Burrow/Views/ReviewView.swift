@@ -43,6 +43,7 @@ struct ReviewView: View {
     var body: some View {
         VStack(spacing: 0) {
             notes
+            keepError
             HStack(spacing: 0) {
                 listArea
                 if kind == .uninstall {
@@ -76,6 +77,20 @@ struct ReviewView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
             .background(.bar)
+            Divider()
+        }
+    }
+
+    /// "Always keep" failed to save. Says so here, and the row stays ticked.
+    @ViewBuilder private var keepError: some View {
+        if let error = model.state(kind).keepError {
+            Label(error, systemImage: "exclamationmark.triangle")
+                .font(RowType.secondary)
+                .foregroundStyle(.red)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(.bar)
             Divider()
         }
     }
@@ -159,9 +174,16 @@ struct ReviewView: View {
         model.setSelected(items.map(\.id), turnOn, in: kind)
     }
 
+    /// Selectable rows the search filter leaves on screen. Select all and none act on these only.
+    private var visibleIDs: [ScanItem.ID] {
+        sections.flatMap(\.items).filter(\.selectable).map(\.id)
+    }
+
     private var footer: some View {
         let picked = model.selectedCount(kind)
         let all = model.selectableItems(kind).count
+        let visible = visibleIDs
+        let visibleOn = visible.filter { model.isSelected($0, in: kind) }.count
         return HStack(spacing: 12) {
             Text("\(ByteSize.format(model.selectedBytes(kind))) of \(ByteSize.format(model.totalBytes(kind))) selected")
                 .font(RowType.primary)
@@ -172,9 +194,9 @@ struct ReviewView: View {
                 .monospacedDigit()
             Spacer()
             if kind != .uninstall {
-                Button("Select all") { model.selectAll(kind) }.disabled(picked == all)
+                Button("Select all") { model.selectAll(kind, within: visible) }.disabled(visibleOn == visible.count)
             }
-            Button("Select none") { model.selectNone(kind) }.disabled(picked == 0)
+            Button("Select none") { model.selectNone(kind, within: visible) }.disabled(visibleOn == 0)
         }
         .buttonStyle(.link)
         .controlSize(.small)

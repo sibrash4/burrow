@@ -15,13 +15,33 @@ enum Entry {
     }
 }
 
+/// Quitting while Mole is running: Cmd+Q cancels the run and waits for the whitelist to be restored first.
+@MainActor
+final class BurrowAppDelegate: NSObject, NSApplicationDelegate {
+    weak var model: AppModel?
+
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard let model, model.hasActiveRun else { return .terminateNow }
+        Task { @MainActor in
+            await model.stopAllAndWait()
+            sender.reply(toApplicationShouldTerminate: true)
+        }
+        return .terminateLater
+    }
+}
+
 struct BurrowApp: App {
+    @NSApplicationDelegateAdaptor(BurrowAppDelegate.self) private var appDelegate
     @State private var model = AppWiring.makeModel()
 
     var body: some Scene {
         Window("Burrow", id: "main") {
             RootView()
                 .environment(model)
+                .task {
+                    appDelegate.model = model
+                    await model.checkMole()
+                }
         }
         .defaultSize(width: 1200, height: 760)
         .commands {
