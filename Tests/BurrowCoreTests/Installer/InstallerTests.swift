@@ -79,8 +79,9 @@ final class InstallerTests: XCTestCase {
         XCTAssertEqual(result?.exitCode, 0)
     }
 
-    /// F21: Mole redraws its confirm line as Enter lands, and only then erases it and prints the run. The run
-    /// log must start after the erase, so the redrawn prompt is not reported as run output.
+    /// F21: on Enter, installer.sh erases the unfinished confirm line (printf "\r\033[K") before it prints the run.
+    /// The erase shortens the transcript, so a mark taken while the prompt was still there skips the start of the
+    /// run. The run log must keep the first run lines and must not contain the prompt.
     func testRunLogStartsAfterConfirmPromptIsErased() async throws {
         let scan = InstallerParser.scanResult(entries: try fixtureEntries())
         let wanted = ["Flux.zip | Downloads", "Ice.zip | Downloads"]
@@ -94,14 +95,15 @@ final class InstallerTests: XCTestCase {
 
         ➤ Delete 2 installers, 5.6MB  Enter confirm, ESC cancel:
         """
-        session.runPromptEcho = "\r\n➤ Delete 2 installers, 5.6MB  Enter confirm, ESC cancel:\r\n"
+        session.runStartBytes = "\r\u{1B}[K\n"
         session.runPromptLinger = 0.5
         session.runOutput = "Removing...\r\nRemoved 2 installers, freed 5.34MB\r\n"
         let job = InstallerJob(launcher: FakeLauncher(session: session), driver: fast)
 
         let (lines, result) = try await collect(job.run(selection: Set(wanted), from: scan))
         XCTAssertFalse(lines.contains { $0.contains(MenuSession.confirmMarker) }, "run log picked up the erased prompt: \(lines)")
-        XCTAssertTrue(lines.contains("Removed 2 installers, freed 5.34MB"))
+        XCTAssertTrue(lines.contains("Removing..."), "run log lost the first run line: \(lines)")
+        XCTAssertTrue(lines.contains("Removed 2 installers, freed 5.34MB"), "run log lost the summary: \(lines)")
         XCTAssertEqual(result?.itemCount, 2)
     }
 

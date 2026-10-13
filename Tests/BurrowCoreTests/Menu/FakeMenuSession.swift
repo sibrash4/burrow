@@ -36,7 +36,6 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     private var items: [FakeMenuItem]
     private var cursor = 0
     private var top = 0
-    private var transcriptText = ""
     private var exited = false
     private var enterCount = 0
     /// Exit code reported once the fake has exited.
@@ -51,22 +50,23 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     private var lastMove = Date.distantPast
     /// Added to the "N selected" counter to simulate a header that disagrees with the rows.
     var headerCountOffset = 0
-    /// Text Mole prints after the first Enter (the confirm screen).
+    /// Text Mole prints after the first Enter (the confirm screen). Its last line is the unfinished prompt.
     var confirmScreen = ""
-    /// Text Mole prints once the run starts, after the confirm prompt is erased (see `runPromptLinger`).
+    /// Bytes Mole writes when the second Enter starts the run, before `runOutput`. Installer: erase the prompt line,
+    /// then a line break (installer.sh: printf "\r\033[K"; echo ""). Purge only adds a line break (project.sh: echo "").
+    var runStartBytes = "\n"
+    /// Text Mole prints once the run starts (after `runStartBytes`).
     var runOutput = ""
-    /// Mole redraws its confirm line as it starts. This is printed right at the second Enter, before the erase.
-    var runPromptEcho = ""
-    /// How long the confirm prompt stays on screen after the second Enter before Mole erases it.
+    /// How long the confirm prompt stays on screen after the second Enter before Mole starts the run.
     var runPromptLinger: TimeInterval = 0
     private var runStartedAt: Date?
     private var runOutputPrinted = false
-    /// Gap between the erase and the run output, so a reader can take its mark in between.
-    private static let eraseGap: TimeInterval = 0.3
+    /// Transcript as the app sees it: the same stripper PTYSession uses, so erases shorten it the same way.
+    private var stripper = ANSIStripper()
     private(set) var sent: [String] = []
 
     init(kind: MenuKind, items: [FakeMenuItem], perPage: Int = 5, cursor: Int = 0, transcript: String = "") {
-        self.transcriptText = transcript
+        _ = stripper.feed(transcript.unicodeScalars)
         self.kind = kind; self.items = items; self.perPage = perPage; self.cursor = cursor
         self.top = max(0, min(cursor, items.count - perPage))
     }
@@ -95,10 +95,9 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
         case TerminalKey.enter:
             enterCount += 1
             if enterCount == 1 {
-                transcriptText += confirmScreen
+                _ = stripper.feed(confirmScreen.unicodeScalars)
             } else {
                 runStartedAt = Date()
-                transcriptText += runPromptEcho
             }
         case TerminalKey.quit:
             exited = true
@@ -108,16 +107,17 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     }
 
     func currentFrame() -> String { lock.withLock { () -> String in advance(); return render() } }
-    func transcript() -> String { lock.withLock { () -> String in advance(); return transcriptText } }
+    func transcript() -> String { lock.withLock { () -> String in advance(); return stripper.text } }
     var lines: AsyncStream<String> { AsyncStream { $0.finish() } }
     func terminate() { lock.withLock { exited = true } }
 
-    /// Caller holds the lock. Once the confirm prompt has been erased, prints the run output and exits.
+    /// Caller holds the lock. Once the confirm prompt has stayed up for `runPromptLinger`, Mole starts the run:
+    /// the erase or line break, then the run output. Then it exits.
     private func advance() {
         guard let started = runStartedAt, !runOutputPrinted else { return }
-        guard Date() >= started.addingTimeInterval(runPromptLinger + Self.eraseGap) else { return }
+        guard Date() >= started.addingTimeInterval(runPromptLinger) else { return }
         runOutputPrinted = true
-        transcriptText += runOutput
+        _ = stripper.feed((runStartBytes + runOutput).unicodeScalars)
         exited = true
     }
 
@@ -127,7 +127,7 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
             let (frame, ended) = lock.withLock { () -> (String, Bool) in advance(); return (render(), exited) }
             if predicate(frame) { return frame }
             // Same as PTYSession: if Mole is gone and the screen never matched, fail now instead of waiting.
-            if ended { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: lock.withLock { transcriptText }) }
+            if ended { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: lock.withLock { stripper.text }) }
             guard Date() < deadline else { throw BurrowError.timeout("frame") }
             try await Task.sleep(nanoseconds: 2_000_000)
         }

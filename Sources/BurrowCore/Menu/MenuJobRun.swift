@@ -100,9 +100,8 @@ enum MenuJobRun {
                     continuation.yield(.status(spec.label))
                     // Mole drops keys that arrive just after a prompt appears; let the screen go quiet first.
                     try await PromptTiming.waitUntilQuiet(session, grace: driver.promptGrace)
-                    let before = session.transcript().utf8.count
+                    let runMark = completedLength(session.transcript())
                     try session.send(TerminalKey.enter)
-                    let runMark = try await runStartMark(after: before, in: session)
 
                     var emitted = runMark
                     var exitCode: Int32?
@@ -130,23 +129,13 @@ enum MenuJobRun {
         }
     }
 
-    /// Mole redraws its confirm prompt as Enter lands, erases it, then prints the run. The run log starts just past
-    /// the last redrawn prompt line, so that line stays out of the log. Waits up to 5 s for the erase first. If Mole
-    /// never redraws the prompt, or exits first, the mark stays at `before` (the transcript position before Enter),
-    /// so no run output is lost.
-    private static func runStartMark(after before: Int, in session: InteractiveSession) async throws -> Int {
-        do {
-            _ = try await session.waitForFrame(timeout: 5) { !$0.contains(MenuSession.confirmMarker) }
-        } catch BurrowError.cancelled {
-            throw BurrowError.cancelled
-        } catch {
-            // Timed out, or Mole exited. Use whatever has been redrawn so far.
-        }
-        let tail = MenuSession.text(of: session.transcript(), after: before)
-        guard let prompt = tail.range(of: MenuSession.confirmMarker, options: .backwards) else { return before }
-        var cut = prompt.upperBound
-        if let newline = tail[cut...].firstIndex(where: \.isNewline) { cut = tail.index(after: newline) }
-        return before + tail[..<cut].utf8.count
+    /// Byte length of the transcript up to and including its last newline. The line still being typed is left out.
+    /// Mole's installer confirm prompt is that unfinished line, and on Enter Mole erases it (`ESC[K`) before the run
+    /// prints, which shortens the transcript. A mark taken after the prompt would then skip the start of the run.
+    private static func completedLength(_ transcript: String) -> Int {
+        let bytes = transcript.utf8
+        guard let last = bytes.lastIndex(of: 10) else { return 0 }
+        return bytes.distance(from: bytes.startIndex, to: last) + 1
     }
 
     /// Emits the complete lines after `offset` bytes (everything when `final`) and returns the new offset.

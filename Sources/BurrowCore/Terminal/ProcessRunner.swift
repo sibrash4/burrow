@@ -110,8 +110,32 @@ private final class RunningProcess: @unchecked Sendable {
             throw Self.failure(error)
         }
 
-        let data = FileHandle(fileDescriptor: readEnd, closeOnDealloc: true).readDataToEndOfFile()
+        let data = drain(readEnd)
         return (reap(pid), data)
+    }
+
+    /// Reads until the pipe reaches EOF, which happens once every process in the group has closed its output.
+    /// After cancellation it gives up waiting for EOF after a short grace period, so a helper that left the group
+    /// (setsid, daemonised) cannot hold the cancelled call open. Closes `fd` in every case.
+    private func drain(_ fd: Int32) -> Data {
+        defer { close(fd) }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+        var cancelledAt: Date?
+        while true {
+            // Checked on every pass, so a helper that keeps writing cannot hold a cancelled call open either.
+            if wasCancelled {
+                let start = cancelledAt ?? Date()
+                cancelledAt = start
+                if Date().timeIntervalSince(start) > 3 { break }
+            }
+            var poller = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            guard poll(&poller, 1, 50) > 0 else { continue }
+            let count = read(fd, &buffer, buffer.count)
+            if count > 0 { data.append(buffer, count: count); continue }
+            if count == 0 || (errno != EINTR && errno != EAGAIN) { break }
+        }
+        return data
     }
 
     func cancel() {
@@ -142,7 +166,15 @@ private final class RunningProcess: @unchecked Sendable {
         posix_spawnattr_init(&attributes)
         defer { posix_spawnattr_destroy(&attributes) }
         posix_spawnattr_setpgroup(&attributes, 0)
-        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT))
+        // The child must not inherit this thread's blocked signals or ignored dispositions. A blocked SIGTERM would
+        // make cancel() wait for the 2 s SIGKILL instead of stopping the group at once.
+        var allSignals = sigset_t(), noSignals = sigset_t()
+        sigfillset(&allSignals)
+        sigemptyset(&noSignals)
+        posix_spawnattr_setsigdefault(&attributes, &allSignals)
+        posix_spawnattr_setsigmask(&attributes, &noSignals)
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT
+            | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
 
         let argv: [UnsafeMutablePointer<CChar>?] = ([executable.path] + args).map { strdup($0) } + [nil]
         let envp: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
