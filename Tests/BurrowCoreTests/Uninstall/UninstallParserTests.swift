@@ -66,6 +66,25 @@ final class UninstallParserTests: XCTestCase {
         XCTAssertEqual(plan.notes.count, 1)
     }
 
+    func testRemovalPlanSkipsReviewOnlyLines() {
+        // Real shape of Mole 1.59.1's preview (batch.sh _batch_preview_and_confirm). Review-only paths are never removed.
+        let text = """
+        Files to be removed:
+
+        ◎ Zoom , 412MB
+          ✓ /Applications/zoom.us.app , 400MB
+          ✓ ~/Library/Preferences/us.zoom.xos.plist , 4KB
+          ◎ Review only: /Library/LaunchDaemons/us.zoom.ZoomDaemon.plist , 4KB
+
+        ➤ Remove 1 app, 412MB  Enter confirm, ESC cancel:
+        """
+        let plan = UninstallOutput.removalPlan(in: text)
+        XCTAssertEqual(plan.names, ["Zoom"])
+        XCTAssertEqual(plan.count, 1)
+        XCTAssertEqual(plan.files["Zoom"], ["/Applications/zoom.us.app, 400MB", "~/Library/Preferences/us.zoom.xos.plist, 4KB"])
+        XCTAssertTrue(plan.notes.isEmpty)
+    }
+
     func testSummaryParsing() {
         let summary = UninstallOutput.summary(in: UninstallScreens.summary(1, freed: "12.80GB", names: "Alpha"))
         XCTAssertEqual(summary.apps, 1)

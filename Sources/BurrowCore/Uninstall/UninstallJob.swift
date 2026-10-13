@@ -56,12 +56,14 @@ public struct UninstallJob: MoleJob {
             return ScanGroup(id: source.lowercased(), title: groupTitle(source), items: sorted.map(\.1))
         }
 
-        var notes: [String] = []
-        if apps.contains(where: { $0.source == "Homebrew" }) {
-            notes.append("Homebrew apps usually ask for an administrator password. Burrow can't enter one and will stop if Mole asks.")
-        }
+        // Mole quits a running app before it removes it. The user is not asked, so say so here.
+        let notes = ["Running apps are quit before removal."]
         return ScanResult(kind: .uninstall, groups: groups, notes: notes)
     }
+
+    /// Homebrew casks are removed by `brew uninstall --cask --zap`, which deletes their data for good and ignores
+    /// MOLE_DELETE_MODE. Burrow never offers them; the user removes them in Terminal.
+    static let homebrewNote = "Removed permanently by Homebrew (brew --zap) — uninstall in Terminal"
 
     private static func sourceOrder(_ a: String, _ b: String) -> Bool {
         let rank = ["App": 0, "Homebrew": 1]
@@ -88,7 +90,9 @@ public struct UninstallJob: MoleJob {
             var id = app.bundleId ?? app.path
             if !seenIds.insert(id).inserted { id = app.path; seenIds.insert(id) }
             var note: String?
-            if app.name.hasPrefix("-") {
+            if app.source == "Homebrew" {
+                note = homebrewNote
+            } else if app.name.hasPrefix("-") {
                 note = "Name starts with a dash; Mole would read it as an option"
             } else if nameUse[app.name.lowercased(), default: 0] > 1 {
                 note = "Another app has the same name"
@@ -131,7 +135,7 @@ public struct UninstallJob: MoleJob {
             }
             // Parsed from the transcript, not the screen: a long file list scrolls off the top of the screen.
             let parsed = UninstallOutput.removalPlan(in: session.transcript())
-            return Array((parsed.files[name] ?? []).dropFirst())
+            return Self.leftoverPaths(parsed.files[name] ?? [], bundle: item.paths.first)
         } onCancel: {
             session.terminate()
         }
@@ -245,6 +249,19 @@ public struct UninstallJob: MoleJob {
 
     /// The arguments for the leftover preview. Always contains --dry-run.
     static func previewArguments(for name: String) -> [String] { ["uninstall", "--dry-run", name] }
+
+    /// The paths Mole lists under an app, minus the app bundle. Mole prints notes above the bundle line
+    /// ("Steam launcher only ..."), so the bundle is matched by its path, not by position, and notes are dropped.
+    static func leftoverPaths(_ lines: [String], bundle: String?) -> [String] {
+        let shownBundle = bundle.map { ($0 as NSString).abbreviatingWithTildeInPath }
+        return lines.filter { line in
+            // System-level files are listed as "System: <path>". Anything else that is not a path is a note.
+            let path = line.hasPrefix("System: ") ? line.dropFirst("System: ".count) : line[...]
+            guard path.hasPrefix("/") || path.hasPrefix("~") else { return false }
+            if let shownBundle, line == shownBundle || line.hasPrefix(shownBundle + ", ") { return false }
+            return true
+        }
+    }
 
     /// Sends an answer. If Mole already exited, the following wait reports why, so a failed write is not the error.
     private static func answer(_ keys: String, on session: InteractiveSession) throws {

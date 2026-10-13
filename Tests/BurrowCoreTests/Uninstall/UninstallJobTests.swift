@@ -174,13 +174,38 @@ final class UninstallJobTests: XCTestCase {
         XCTAssertFalse(session.sent.contains("\r"))
     }
 
-    func testPasswordPromptTerminatesWithoutTyping() async throws {
+    func testHomebrewCasksAreNotSelectableAndNeverRun() async throws {
         let scan = scanResult([("Alpha", "1MB", 1)], source: "Homebrew")
+        let item = try XCTUnwrap(scan.allItems.first)
+        // Homebrew removes casks with --zap, which deletes their data for good. Burrow must not offer them.
+        XCTAssertFalse(item.selectable)
+        XCTAssertFalse(item.selectedByDefault)
+        XCTAssertEqual(item.note, "Removed permanently by Homebrew (brew --zap) — uninstall in Terminal")
+        XCTAssertTrue(scan.defaultSelection.isEmpty)
+
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "1MB")]))
+        let (job, launcher) = job(session: session)
+        do {
+            _ = try await collect(job.run(selection: [item.id], from: scan))
+            XCTFail("expected notSelectable")
+        } catch let error as UninstallError {
+            XCTAssertEqual(error, .notSelectable("Alpha"))
+        }
+        XCTAssertTrue(launcher.launches.isEmpty)
+    }
+
+    func testScanNotesSayRunningAppsAreQuit() {
+        let scan = scanResult([("Alpha", "1MB", 1)])
+        XCTAssertTrue(scan.notes.contains("Running apps are quit before removal."))
+    }
+
+    func testPasswordPromptTerminatesWithoutTyping() async throws {
+        let scan = scanResult([("Alpha", "1MB", 1)])
         let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "1MB")]))
         session.onSend { s, keys in
             switch keys {
-            case "y\r": s.show(UninstallScreens.plan(["Alpha"], brew: true))
-            case "\r": s.show("\n➤ Admin required for Homebrew casks: openlogi\nEnter your credentials:\nPassword:", replace: false)
+            case "y\r": s.show(UninstallScreens.plan(["Alpha"]))
+            case "\r": s.show("\n➤ Admin required to remove Alpha\nEnter your credentials:\nPassword:", replace: false)
             default: break
             }
         }
@@ -236,6 +261,36 @@ final class UninstallJobTests: XCTestCase {
         XCTAssertNil(result.itemCount)
     }
 
+    func testRunIgnoresReviewOnlySystemPathsInThePlan() async throws {
+        // Mole lists system-level paths it will not remove as "Review only". They must not be read as another app.
+        let plan = """
+        Files to be removed:
+
+        ◎ Alpha , 5.9MB
+          ✓ /Applications/Alpha.app , 5.8MB
+          ◎ Review only: /Library/LaunchDaemons/com.example.alpha.plist , 4KB
+
+        ➤ Remove 1 app, 5.9MB  Enter confirm, ESC cancel:
+        """
+        let scan = scanResult([("Alpha", "1MB", 1)])
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "1MB")]))
+        session.onSend { s, keys in
+            switch keys {
+            case "y\r": s.show(plan)
+            case "\r":
+                s.show(UninstallScreens.summary(1, freed: "5.9MB", names: "Alpha"), replace: false)
+                s.exit(0)
+            default: break
+            }
+        }
+        let (job, _) = job(session: session)
+        let events = try await collect(job.run(selection: Set(scan.allItems.map(\.id)), from: scan))
+        XCTAssertEqual(session.sent, ["y\r", "\r"])
+        guard case .finished(let result)? = events.last else { return XCTFail("no result") }
+        XCTAssertEqual(result.itemCount, 1)
+        XCTAssertTrue(result.problems.isEmpty)
+    }
+
     // MARK: preview
 
     func testPreviewLeftoversRunsDryRunAndCancels() async throws {
@@ -253,6 +308,54 @@ final class UninstallJobTests: XCTestCase {
         XCTAssertEqual(session.sent, ["y\r", "q"])
         XCTAssertEqual(lines, ["~/Library/Preferences/com.example.alpha.plist, 4KB", "~/Library/Caches/com.example.alpha, 61KB"])
         XCTAssertTrue(session.terminated)
+    }
+
+    func testPreviewLeftoversDropsTheBundleEvenWhenANoteComesFirst() async throws {
+        // Mole prints a note (here the Steam one) above the bundle line. The bundle must go, and the note is not a file.
+        let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
+        let item = try XCTUnwrap(scan.allItems.first)
+        let screen = """
+        Files to be removed:
+
+        ◎ Alpha , 9MB
+          ◎ Steam launcher only; game files managed by Steam are not included
+          ✓ /Applications/Alpha.app , 5.8MB
+          ◎ System: /Library/Preferences/com.example.alpha.plist , 4KB
+          ✓ ~/Library/Caches/com.example.alpha , 61KB
+
+        ➤ Remove 1 app, 9MB  Enter confirm, ESC cancel:
+        """
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "5.8MB")]))
+        session.onSend { s, keys in
+            if keys == "y\r" { s.show(screen) }
+        }
+        let (job, _) = job(session: session)
+        let lines = try await job.previewLeftovers(for: item)
+        // System-level files are still removed by Mole, so they stay in the list.
+        XCTAssertEqual(lines, ["System: /Library/Preferences/com.example.alpha.plist, 4KB", "~/Library/Caches/com.example.alpha, 61KB"])
+    }
+
+    func testPreviewLeftoversMatchesABundleInsideHomeByItsTildePath() async throws {
+        // The bundle is printed as ~/Applications/..., so it has to be matched on the abbreviated path.
+        let app = UninstallApp(name: "Alpha", bundleId: "com.example.alpha", source: "App", uninstallName: "Alpha",
+                               path: NSHomeDirectory() + "/Applications/Alpha.app", sizeText: "5.8MB", bytes: 5_800_000)
+        let item = try XCTUnwrap(UninstallJob.makeResult(from: [app]).allItems.first)
+        let screen = """
+        Files to be removed:
+
+        ◎ Alpha , 9MB
+          ✓ ~/Applications/Alpha.app , 5.8MB
+          ✓ ~/Library/Caches/com.example.alpha , 61KB
+
+        ➤ Remove 1 app, 9MB  Enter confirm, ESC cancel:
+        """
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "5.8MB")]))
+        session.onSend { s, keys in
+            if keys == "y\r" { s.show(screen) }
+        }
+        let (job, _) = job(session: session)
+        let lines = try await job.previewLeftovers(for: item)
+        XCTAssertEqual(lines, ["~/Library/Caches/com.example.alpha, 61KB"])
     }
 
     func testPreviewArgumentsAlwaysContainDryRun() {

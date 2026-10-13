@@ -41,7 +41,11 @@ struct LeftoversPane: View {
     }
 
     @ViewBuilder private var content: some View {
-        if failed {
+        if let item, !item.selectable {
+            // Burrow doesn't remove this row, so Mole is never asked about it. Say why instead of "Couldn't list".
+            ContentUnavailableView("Not removed by Burrow", systemImage: "nosign",
+                                   description: Text(item.note ?? "Burrow can't remove this app safely."))
+        } else if failed {
             ContentUnavailableView("Couldn't list leftovers", systemImage: "exclamationmark.circle")
         } else if let leftovers {
             if leftovers.isEmpty {
@@ -81,7 +85,7 @@ struct LeftoversPane: View {
     private func load() async {
         leftovers = nil
         failed = false
-        guard let item else { return }
+        guard let item, item.selectable else { return }
         do {
             let result = try await model.leftovers(for: item)
             guard !Task.isCancelled else { return }

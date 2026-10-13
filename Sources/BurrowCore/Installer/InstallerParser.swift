@@ -11,9 +11,10 @@ public enum InstallerParser {
         for e in entries {
             let row = e.row
             let duplicate = (keyCounts[e.key] ?? 0) > 1
+            // Mole's installer menu starts with nothing ticked, so Burrow does too.
             let item = ScanItem(
                 id: e.key, title: row.name, detail: row.location, bytes: ByteSize.parse(row.size),
-                selectable: !duplicate, selectedByDefault: true,
+                selectable: !duplicate, selectedByDefault: false,
                 note: duplicate ? "Another installer has the same name here" : nil)
             if itemsByLocation[row.location] == nil { order.append(row.location) }
             itemsByLocation[row.location, default: []].append(item)

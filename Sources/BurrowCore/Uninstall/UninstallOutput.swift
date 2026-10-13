@@ -14,7 +14,7 @@ public enum UninstallError: Error, LocalizedError, Sendable, Equatable {
         case .nothingSelected:
             "No apps are selected."
         case .notSelectable(let name):
-            "\(name) can't be removed from Burrow because Mole couldn't tell it apart from another app."
+            "\(name) can't be removed from Burrow, because Burrow can't pick it safely."
         case .appNotFound(let name):
             "Mole couldn't find \(name) any more."
         case .adminRequired(let names):
@@ -106,6 +106,8 @@ public enum UninstallOutput {
                 plan.count = count
                 break
             }
+            // Mole never removes these system-level paths (it reports them as kept), so they are not part of the plan.
+            if line.hasPrefix(reviewOnlyPrefix) { continue }
             if let name = headerName(line) {
                 plan.names.append(name)
                 plan.files[name] = []
@@ -118,6 +120,9 @@ public enum UninstallOutput {
         }
         return plan
     }
+
+    /// "◎ Review only: /Library/LaunchDaemons/x.plist , 4KB" (Mole's review-only system paths).
+    private static let reviewOnlyPrefix = "◎ Review only:"
 
     /// "◎ OpenLogi [Brew] , 51.8MB" -> "OpenLogi"
     private static func headerName(_ line: String) -> String? {
