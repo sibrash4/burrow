@@ -5,7 +5,7 @@ final class CleanJobTests: TempDirTestCase {
     private var listURL: URL { dir.appendingPathComponent("config/clean-list.txt") }
     private let original = Data("# my whitelist\n/Users/test/Documents/keep\n".utf8)
 
-    private func makeJob(_ mole: FakeMole, _ launcher: FakeLauncher) -> CleanJob {
+    private func makeJob(_ mole: FakeMole, _ launcher: CleanFakeLauncher) -> CleanJob {
         CleanJob(
             runner: mole, launcher: launcher,
             cleanListURL: listURL, whitelistURL: whitelist, backupURL: backup,
@@ -16,10 +16,10 @@ final class CleanJobTests: TempDirTestCase {
     private func setUpJob(
         session: FakeSession? = FakeSession(chunks: CleanTranscripts.skipSudoThenFinish),
         whitelistContent: Data? = nil
-    ) throws -> (CleanJob, FakeMole, FakeLauncher) {
+    ) throws -> (CleanJob, FakeMole, CleanFakeLauncher) {
         if let whitelistContent { try write(whitelistContent) }
         let mole = FakeMole(whitelistURL: whitelist, listURL: listURL)
-        let launcher = FakeLauncher(session: session)
+        let launcher = CleanFakeLauncher(session: session)
         return (makeJob(mole, launcher), mole, launcher)
     }
 
@@ -96,7 +96,7 @@ final class CleanJobTests: TempDirTestCase {
         let scan = try await job.scan()
         let callsAfterScan = mole.calls.count
 
-        let events = try await collect(job.run(selection: scan.defaultSelection, from: scan))
+        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
 
         XCTAssertEqual(mole.calls.count, callsAfterScan, "no extra preview when nothing is protected")
         XCTAssertEqual(launcher.launches, [["clean"]])
@@ -115,7 +115,7 @@ final class CleanJobTests: TempDirTestCase {
         let whitelistFile = whitelist
         launcher.onLaunch = { whitelistAtLaunch.set(try? String(contentsOf: whitelistFile, encoding: .utf8)) }
 
-        let events = try await collect(job.run(selection: chosen, from: scan))
+        let events = try await collectEvents(job.run(selection: chosen, from: scan))
 
         let during = try XCTUnwrap(whitelistAtLaunch.get())
         XCTAssertTrue(during.hasPrefix("# my whitelist\n/Users/test/Documents/keep\n"))
@@ -143,7 +143,7 @@ final class CleanJobTests: TempDirTestCase {
         let whitelistFile = whitelist
         launcher.onLaunch = { whitelistAtLaunch.set(try? String(contentsOf: whitelistFile, encoding: .utf8)) }
 
-        _ = try await collect(job.run(selection: chosen, from: scan))
+        _ = try await collectEvents(job.run(selection: chosen, from: scan))
 
         let during = try XCTUnwrap(whitelistAtLaunch.get())
         XCTAssertTrue(during.contains("/Users/test/Library/Mobile Documents*"), "optional defaults stay in force")
@@ -159,7 +159,7 @@ final class CleanJobTests: TempDirTestCase {
         mole.honorsWhitelist = false
 
         do {
-            _ = try await collect(job.run(selection: chosen, from: scan))
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
             XCTFail("expected selectionMismatch")
         } catch BurrowError.selectionMismatch(let expected, let actual) {
             XCTAssertTrue(expected.contains("1 unticked item"))
@@ -178,7 +178,7 @@ final class CleanJobTests: TempDirTestCase {
         mole.honorsWhitelist = false
 
         do {
-            _ = try await collect(job.run(selection: chosen, from: scan))
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
             XCTFail("expected selectionMismatch")
         } catch BurrowError.selectionMismatch(_, let actual) {
             XCTAssertTrue(actual.contains("npm cache"))
@@ -198,7 +198,7 @@ final class CleanJobTests: TempDirTestCase {
         let whitelistFile = whitelist
         launcher.onLaunch = { whitelistAtLaunch.set(try? String(contentsOf: whitelistFile, encoding: .utf8)) }
         // Neither row is in the selection: only the selectable one is protected.
-        _ = try? await collect(job.run(selection: [], from: scan))
+        _ = try? await collectEvents(job.run(selection: [], from: scan))
 
         let during = try XCTUnwrap(whitelistAtLaunch.get())
         XCTAssertTrue(during.contains("/Users/test/Library/Logs/Claude-3p"))
@@ -210,7 +210,7 @@ final class CleanJobTests: TempDirTestCase {
         let scan = try await job.scan()
         let chosen = try selection(scan, without: ["Claude logs"])
         do {
-            _ = try await collect(job.run(selection: chosen, from: scan))
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
             XCTFail("expected an error")
         } catch BurrowError.moleNotFound {
         }
@@ -226,7 +226,7 @@ final class CleanJobTests: TempDirTestCase {
         let chosen = try selection(scan, without: ["Claude logs"])
 
         do {
-            _ = try await collect(job.run(selection: chosen, from: scan))
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
             XCTFail("expected passwordRequested")
         } catch let error as CleanJobError {
             XCTAssertEqual(error, .passwordRequested)
@@ -241,7 +241,7 @@ final class CleanJobTests: TempDirTestCase {
         let session = FakeSession(chunks: CleanTranscripts.skipSudoThenFinish)
         let (job, _, _) = try setUpJob(session: session)
         let scan = try await job.scan()
-        let events = try await collect(job.run(selection: scan.defaultSelection, from: scan))
+        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
 
         XCTAssertEqual(session.sent, [" "])
         XCTAssertTrue(events.lines.contains { $0.contains("skipping") })
@@ -254,14 +254,14 @@ final class CleanJobTests: TempDirTestCase {
         ])
         let (job, _, _) = try setUpJob(session: session)
         let scan = try await job.scan()
-        _ = try await collect(job.run(selection: scan.defaultSelection, from: scan))
+        _ = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
         XCTAssertEqual(session.sent, ["\r"])
     }
 
     func testRunReportsFreedSpaceAndProgress() async throws {
         let (job, _, _) = try setUpJob()
         let scan = try await job.scan()
-        let events = try await collect(job.run(selection: scan.defaultSelection, from: scan))
+        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
 
         let result = try XCTUnwrap(events.result)
         XCTAssertEqual(result.freedBytes, 1_200_000_000)
@@ -279,7 +279,7 @@ final class CleanJobTests: TempDirTestCase {
         let scan = try await job.scan()
         let chosen = try selection(scan, without: ["Claude logs"])
 
-        let consumer = Task { _ = try? await collect(job.run(selection: chosen, from: scan)) }
+        let consumer = Task { _ = try? await collectEvents(job.run(selection: chosen, from: scan)) }
         try await waitUntil { !launcher.launches.isEmpty }
         XCTAssertNotEqual(try bytes(), original, "protected while running")
         consumer.cancel()

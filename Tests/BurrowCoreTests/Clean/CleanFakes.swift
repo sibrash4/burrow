@@ -110,7 +110,7 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
     func terminate() { lock.withLock { _terminated = true } }
 }
 
-final class FakeLauncher: InteractiveLaunching, @unchecked Sendable {
+final class CleanFakeLauncher: InteractiveLaunching, @unchecked Sendable {
     private let lock = NSLock()
     private var _launches: [[String]] = []
     private var _environments: [[String: String]] = []
@@ -143,7 +143,7 @@ enum CleanTranscripts {
     ]
 }
 
-func collect(_ stream: AsyncThrowingStream<JobEvent, Error>) async throws -> [JobEvent] {
+func collectEvents(_ stream: AsyncThrowingStream<JobEvent, Error>) async throws -> [JobEvent] {
     var events: [JobEvent] = []
     for try await event in stream { events.append(event) }
     return events

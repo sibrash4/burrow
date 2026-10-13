@@ -37,7 +37,7 @@ extension JobKind {
     func actionTitle(bytes: Int64, count: Int) -> String {
         switch self {
         case .uninstall: return count == 1 ? "Uninstall 1 app" : "Uninstall \(count) apps"
-        case .clean, .purge, .installers:
+        case .clean, .purge, .installers, .aiLeftovers:
             let verb = self == .clean ? "Clean" : self == .purge ? "Purge" : "Remove"
             if bytes > 0 { return "\(verb) \(ByteSize.format(bytes))" }
             return count == 1 ? "\(verb) 1 item" : "\(verb) \(count) items"
@@ -50,6 +50,7 @@ extension JobKind {
         case .purge: "No build folders found"
         case .installers: "No installers found"
         case .uninstall: "No apps found"
+        case .aiLeftovers: "No old agent leftovers"
         }
     }
 
@@ -59,6 +60,7 @@ extension JobKind {
         case .purge: "No node_modules, dist or similar folders turned up in your projects."
         case .installers: "There are no leftover .dmg, .pkg or .zip files in your usual folders."
         case .uninstall: "Mole didn't list any apps it can remove."
+        case .aiLeftovers: "No agent worktrees, transcripts or model caches older than 30 days turned up."
         }
     }
 
@@ -69,13 +71,14 @@ extension JobKind {
         case .purge: "Build folders are deleted and can be rebuilt."
         case .installers: "Installer files are deleted."
         case .uninstall: "Apps go to the Trash."
+        case .aiLeftovers: "Clean worktrees are removed with git. Transcripts and model caches go to the Trash."
         }
     }
 
     var noun: (one: String, many: String) {
         switch self {
         case .uninstall: ("app", "apps")
-        case .clean, .purge, .installers: ("item", "items")
+        case .clean, .purge, .installers, .aiLeftovers: ("item", "items")
         }
     }
 }

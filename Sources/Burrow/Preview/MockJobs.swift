@@ -57,6 +57,7 @@ enum MockData {
         case .purge: purge
         case .installers: installers
         case .uninstall: uninstall
+        case .aiLeftovers: aiLeftovers
         }
     }
 
@@ -144,6 +145,21 @@ enum MockData {
                 item("i6", "Mole.dmg", "Downloads", bytes: 27_300_000, defaultOn: false),
                 item("i7", "1Password.zip", "Downloads", bytes: 21_800_000, defaultOn: false),
                 item("i8", "Flux.zip", "Downloads", bytes: 2_100_000, defaultOn: false),
+            ]),
+        ]
+    )
+
+    static let aiLeftovers = ScanResult(
+        kind: .aiLeftovers,
+        groups: [
+            ScanGroup(id: "worktrees", title: "Agent worktrees", items: [
+                item("wt1", "feature-search (agent worktree)", "~/dev/tracker-app-wt/search, last used 45 days ago", bytes: 410_000_000),
+            ]),
+            ScanGroup(id: "transcripts", title: "Transcripts", items: [
+                item("tr1", "Claude Code transcripts", "~/.claude/projects, older than 30 days", bytes: 96_000_000, count: 212, defaultOn: false),
+            ]),
+            ScanGroup(id: "models", title: "Model caches", items: [
+                item("m1", "Hugging Face models", "~/.cache/huggingface", bytes: 3_100_000_000, defaultOn: false),
             ]),
         ]
     )
