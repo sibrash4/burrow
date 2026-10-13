@@ -50,6 +50,9 @@ struct BurrowApp: App {
             CommandGroup(after: .toolbar) {
                 Button("Rescan") { model.rescanSelected() }
                     .keyboardShortcut("r", modifiers: .command)
+                Button("Scan All") { model.scanAll() }
+                    .keyboardShortcut("r", modifiers: [.command, .shift])
+                    .disabled(model.isScanningAll)
             }
             CommandGroup(after: .toolbar) {
                 Picker("Appearance", selection: $appearance) {

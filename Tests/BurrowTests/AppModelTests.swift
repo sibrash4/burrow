@@ -57,6 +57,33 @@ struct ScriptedJob: MoleJob {
     }
 }
 
+/// Records which scans start and finish, so a test can see what Scan All touched.
+final class ScanProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var started: [JobKind] = []
+    private var finished: [JobKind] = []
+    func start(_ kind: JobKind) { lock.lock(); started.append(kind); lock.unlock() }
+    func finish(_ kind: JobKind) { lock.lock(); finished.append(kind); lock.unlock() }
+    var startedKinds: [JobKind] { lock.lock(); defer { lock.unlock() }; return started }
+    var finishedKinds: [JobKind] { lock.lock(); defer { lock.unlock() }; return finished }
+}
+
+/// Scans for `delay` and then returns one item. Never runs anything.
+struct ProbeJob: MoleJob {
+    var kind: JobKind
+    var probe: ScanProbe
+    var delay: Duration
+    func scan() async throws -> ScanResult {
+        probe.start(kind)
+        try await Task.sleep(for: delay)
+        probe.finish(kind)
+        return ScanResult(kind: kind, groups: [ScanGroup(id: "g", title: "Group", items: [ScanItem(id: "a", title: "Item", bytes: 1_000)])])
+    }
+    func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
+        AsyncThrowingStream { $0.finish() }
+    }
+}
+
 struct SaveFailed: LocalizedError {
     var errorDescription: String? { "the whitelist is busy" }
 }
@@ -364,6 +391,46 @@ final class AppModelTests: XCTestCase {
         saved.alwaysKeep(item, in: .clean)
         XCTAssertNil(saved.state(.clean).keepError)
         XCTAssertFalse(saved.isSelected("clang", in: .clean))
+    }
+
+    // MARK: Scan All
+
+    private func untilScanAllEnds(_ model: AppModel, file: StaticString = #filePath, line: UInt = #line) async {
+        for _ in 0..<400 where model.isScanningAll { try? await Task.sleep(for: .milliseconds(10)) }
+        XCTAssertFalse(model.isScanningAll, "Scan All never ended", file: file, line: line)
+    }
+
+    func testScanAllScansEveryScreenAndConfirmsNothing() async {
+        let probe = ScanProbe()
+        let jobs = Dictionary(uniqueKeysWithValues: JobKind.allCases.map { ($0, ProbeJob(kind: $0, probe: probe, delay: .milliseconds(20)) as MoleJob) })
+        let model = AppModel(jobs: jobs)
+        model.scanAll()
+        XCTAssertTrue(model.isScanningAll)
+        model.scanAll() // a second press while one is going is ignored
+        await untilScanAllEnds(model)
+        XCTAssertEqual(Set(probe.startedKinds), Set(JobKind.allCases))
+        XCTAssertEqual(probe.startedKinds.count, JobKind.allCases.count)
+        for kind in JobKind.allCases {
+            XCTAssertEqual(model.state(kind).phase, .review, "\(kind) should be in review")
+            XCTAssertNotNil(model.state(kind).scan)
+        }
+        XCTAssertFalse(model.hasActiveRun)
+    }
+
+    func testCancelScanAllStopsTheScansAndClearsTheFlag() async {
+        let probe = ScanProbe()
+        let jobs = Dictionary(uniqueKeysWithValues: JobKind.allCases.map { ($0, ProbeJob(kind: $0, probe: probe, delay: .seconds(5)) as MoleJob) })
+        let model = AppModel(jobs: jobs)
+        model.scanAll()
+        for kind in JobKind.allCases { XCTAssertEqual(model.state(kind).phase, .scanning) }
+        model.cancelScanAll()
+        for kind in JobKind.allCases {
+            XCTAssertEqual(model.state(kind).phase, .failed)
+            XCTAssertTrue(model.state(kind).wasCancelled)
+        }
+        await untilScanAllEnds(model)
+        XCTAssertTrue(probe.finishedKinds.isEmpty)
+        XCTAssertFalse(model.hasActiveRun)
     }
 
     // MARK: Launch and copy

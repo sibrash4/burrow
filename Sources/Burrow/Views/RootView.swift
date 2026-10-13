@@ -44,7 +44,11 @@ struct SidebarView: View {
                         .truncationMode(.tail)
                 }
                 Spacer(minLength: 4)
-                if let size = model.sidebarSize(kind) {
+                if model.state(kind).phase == .scanning {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityLabel("Scanning \(kind.title)")
+                } else if let size = model.sidebarSize(kind) {
                     Text(size).font(RowType.secondary).foregroundStyle(Ink.secondary).monospacedDigit()
                 }
             }
@@ -55,6 +59,18 @@ struct SidebarView: View {
         .listStyle(.sidebar)
         .safeAreaInset(edge: .bottom) {
             VStack(alignment: .leading, spacing: 8) {
+                Button {
+                    if model.isScanningAll { model.cancelScanAll() } else { model.scanAll() }
+                } label: {
+                    Label(
+                        model.isScanningAll ? "Stop Scanning" : "Scan All",
+                        systemImage: model.isScanningAll ? "stop.circle" : "arrow.clockwise"
+                    )
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .help(model.isScanningAll ? "Stop the scans that are running" : "Preview every screen. Nothing is removed.")
+                .accessibilityLabel(model.isScanningAll ? "Stop Scanning" : "Scan All")
                 if case .versionMismatch(let version) = model.moleStatus {
                     Label(BurrowError.unsupportedMoleVersion(version).errorDescription ?? "", systemImage: "info.circle")
                 }
@@ -65,7 +81,7 @@ struct SidebarView: View {
             .font(RowType.secondary)
             .foregroundStyle(Ink.secondary)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(model.moleStatus.isVersionMismatch || model.startupNotice != nil ? 12 : 0)
+            .padding(12)
         }
     }
 }

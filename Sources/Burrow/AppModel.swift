@@ -57,9 +57,12 @@ final class AppModel {
     /// One line shown in the sidebar footer, e.g. after crash recovery. nil when there is nothing to say.
     var startupNotice: String?
     private(set) var states: [JobKind: JobState] = [:]
+    /// True from the first scan of Scan All until the last one has finished or been cancelled. Scan only.
+    private(set) var isScanningAll = false
 
     @ObservationIgnored private var jobs: [JobKind: MoleJob]
     @ObservationIgnored private var tasks: [JobKind: Task<Void, Never>] = [:]
+    @ObservationIgnored private var scanAllTask: Task<Void, Never>?
     @ObservationIgnored private var scanGeneration: [JobKind: Int] = [:]
     @ObservationIgnored private let alwaysKeepHandler: (ScanItem) throws -> Void
     @ObservationIgnored private let leftoversHandler: (ScanItem) async throws -> [Leftover]
@@ -249,6 +252,30 @@ final class AppModel {
 
     func rescanSelected() { scan(selectedKind) }
 
+    /// Scans every screen at once. Preview only: nothing is confirmed or run.
+    func scanAll() {
+        guard !isScanningAll else { return }
+        isScanningAll = true
+        // Started now, not in the Task below, so the spinners show at once and a Stop right after has something to stop.
+        for kind in JobKind.allCases { scan(kind) }
+        // `scan` ignores a kind that is running, confirming or stopping. Its task then belongs to that run,
+        // so only wait on the scans that actually started.
+        let started = JobKind.allCases.filter { state($0).phase == .scanning }
+        scanAllTask = Task { [weak self] in
+            defer {
+                self?.isScanningAll = false
+                self?.scanAllTask = nil
+            }
+            for kind in started { await self?.tasks[kind]?.value }
+        }
+    }
+
+    /// Cancels Scan All and every scan that is still running.
+    func cancelScanAll() {
+        scanAllTask?.cancel()
+        for kind in JobKind.allCases where state(kind).phase == .scanning { cancelScan(kind) }
+    }
+
     private func finishScan(_ kind: JobKind, _ result: ScanResult) {
         var s = state(kind)
         s.scan = result
@@ -316,6 +343,7 @@ final class AppModel {
     /// Quit path: stops every run that is still going, and returns once each one has torn down.
     /// Returns with every stopped run already settled, so the phase is no longer `.stopping` when it returns.
     func stopAllAndWait() async {
+        cancelScanAll()
         for kind in JobKind.allCases where state(kind).phase == .running { cancelRun(kind) }
         for kind in JobKind.allCases where state(kind).phase == .stopping {
             await RunTeardown.shared.waitUntilIdle(kind, timeout: Self.stopLimit)
