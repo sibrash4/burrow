@@ -33,11 +33,13 @@ final class BurrowAppDelegate: NSObject, NSApplicationDelegate {
 struct BurrowApp: App {
     @NSApplicationDelegateAdaptor(BurrowAppDelegate.self) private var appDelegate
     @State private var model = AppWiring.makeModel()
+    @AppStorage("appearance") private var appearance = AppearanceMode.system
 
     var body: some Scene {
         Window("Burrow", id: "main") {
             RootView()
                 .environment(model)
+                .appliesAppearance()
                 .task {
                     appDelegate.model = model
                     await model.checkMole()
@@ -49,6 +51,34 @@ struct BurrowApp: App {
                 Button("Rescan") { model.rescanSelected() }
                     .keyboardShortcut("r", modifiers: .command)
             }
+            CommandGroup(after: .toolbar) {
+                Picker("Appearance", selection: $appearance) {
+                    ForEach(AppearanceMode.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.inline)
+            }
         }
+
+        Settings {
+            AppearanceSettings()
+        }
+    }
+}
+
+/// Settings window (Cmd+,). Holds the same appearance choice as the View menu.
+struct AppearanceSettings: View {
+    @AppStorage("appearance") private var appearance = AppearanceMode.system
+
+    var body: some View {
+        Form {
+            Picker("Appearance", selection: $appearance) {
+                ForEach(AppearanceMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.radioGroup)
+        }
+        .formStyle(.grouped)
+        .frame(width: 320)
+        .fixedSize()
+        .appliesAppearance()
     }
 }
