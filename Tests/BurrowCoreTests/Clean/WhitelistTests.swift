@@ -6,6 +6,7 @@ class TempDirTestCase: XCTestCase {
     var dir: URL!
     var whitelist: URL { dir.appendingPathComponent("config/whitelist") }
     var backup: URL { dir.appendingPathComponent("support/whitelist.backup") }
+    var lockFile: URL { dir.appendingPathComponent("support/whitelist.lock") }
 
     override func setUpWithError() throws {
         dir = FileManager.default.temporaryDirectory.appendingPathComponent("burrow-tests-\(UUID().uuidString)")
@@ -172,6 +173,91 @@ final class WhitelistTransactionTests: TempDirTestCase {
         XCTAssertThrowsError(try transaction().restore())
         XCTAssertEqual(try bytes(), original)
         XCTAssertTrue(backupExists)
+    }
+
+    func testRestoreRefusesToOverwriteAWhitelistEditedDuringTheRun() throws {
+        let original = Data("/Users/test/a\n".utf8)
+        try write(original)
+        let tx = transaction()
+        try tx.begin(extraPatterns: ["/Users/test/x"])
+        let edited = Data("/Users/test/a\n/Users/test/user-added\n".utf8)
+        try edited.write(to: whitelist)
+
+        XCTAssertThrowsError(try tx.restore()) { XCTAssertEqual($0 as? WhitelistError, .changedDuringRun) }
+        XCTAssertEqual(try bytes(), edited, "the user's later edit is kept")
+        XCTAssertFalse(tx.isActive, "the file is no longer treated as a transaction")
+        XCTAssertEqual(try Data(contentsOf: tx.unrestoredURL), original, "the original is kept aside")
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lockFile.path))
+    }
+
+    func testRestoreAlsoCatchesAWhitelistThatWasDeletedDuringTheRun() throws {
+        try write(Data("/Users/test/a\n".utf8))
+        let tx = transaction()
+        try tx.begin(extraPatterns: ["/Users/test/x"])
+        try FileManager.default.removeItem(at: whitelist)
+
+        XCTAssertThrowsError(try tx.restore()) { XCTAssertEqual($0 as? WhitelistError, .changedDuringRun) }
+        XCTAssertFalse(whitelistExists, "a deleted file is not brought back")
+    }
+
+    func testConfirmIntactNeedsTheMarkerAndEveryPattern() throws {
+        try write(Data("/Users/test/a\n".utf8))
+        let tx = transaction()
+        try tx.begin(extraPatterns: ["/Users/test/x"])
+        XCTAssertNoThrow(try tx.confirmIntact(extraPatterns: ["/Users/test/x"]))
+
+        try Data("/Users/test/a\n/Users/test/x\n".utf8).write(to: whitelist)
+        XCTAssertThrowsError(try tx.confirmIntact(extraPatterns: ["/Users/test/x"]), "marker removed") {
+            XCTAssertEqual($0 as? WhitelistError, .changedDuringRun)
+        }
+    }
+
+    func testLockHeldByAnotherLiveBurrowBlocksRecoveryAndANewRun() throws {
+        let original = Data("/Users/test/a\n".utf8)
+        try write(original)
+        let tx = transaction()
+        try tx.begin(extraPatterns: ["/Users/test/x"])
+        let other = try startProcessNamedBurrow()
+        defer { other.terminate() }
+        try "\(other.processIdentifier)\n".write(to: lockFile, atomically: true, encoding: .utf8)
+
+        XCTAssertFalse(try WhitelistTransaction.recoverIfNeeded(fileURL: whitelist, backupURL: backup), "another Burrow is mid-run")
+        XCTAssertTrue(backupExists)
+        XCTAssertThrowsError(try transaction().begin(extraPatterns: ["/Users/test/y"])) {
+            XCTAssertEqual($0 as? WhitelistError, .transactionInProgress)
+        }
+        XCTAssertThrowsError(try tx.restore()) { XCTAssertEqual($0 as? WhitelistError, .transactionInProgress) }
+        XCTAssertTrue(backupExists, "the other run's backup is untouched")
+
+        // Once the other process is gone, recovery works again.
+        other.terminate()
+        other.waitUntilExit()
+        XCTAssertTrue(try WhitelistTransaction.recoverIfNeeded(fileURL: whitelist, backupURL: backup))
+        XCTAssertEqual(try bytes(), original)
+    }
+
+    func testLockFromAPidThatIsGoneDoesNotBlockRecovery() throws {
+        let original = Data("/Users/test/a\n".utf8)
+        try write(original)
+        try transaction().begin(extraPatterns: ["/Users/test/x"])
+        try "2000000\n".write(to: lockFile, atomically: true, encoding: .utf8)
+
+        XCTAssertTrue(try WhitelistTransaction.recoverIfNeeded(fileURL: whitelist, backupURL: backup))
+        XCTAssertEqual(try bytes(), original)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: lockFile.path), "the lock is released")
+    }
+
+    /// A live process whose executable is named Burrow, as another running copy of the app is.
+    private func startProcessNamedBurrow() throws -> Process {
+        let folder = dir.appendingPathComponent("other")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        let executable = folder.appendingPathComponent("Burrow")
+        try FileManager.default.copyItem(at: URL(fileURLWithPath: "/bin/sleep"), to: executable)
+        let process = Process()
+        process.executableURL = executable
+        process.arguments = ["60"]
+        try process.run()
+        return process
     }
 }
 

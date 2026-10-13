@@ -3,10 +3,16 @@ import Foundation
 public enum CleanJobError: Error, LocalizedError, Sendable, Equatable {
     /// Mole asked for a password. Burrow never types one, so the run was stopped.
     case passwordRequested
+    /// The row has no whitelist entry, so it can't be kept for good.
+    case cannotKeep(String)
+    /// The run failed and the whitelist could not be put back either. `restore` says why.
+    case failedWhitelistRestore(run: String, restore: String)
 
     public var errorDescription: String? {
         switch self {
         case .passwordRequested: "Mole asked for an admin password, so Burrow stopped the clean. Admin-only items aren't supported yet."
+        case .cannotKeep(let title): "Burrow can't keep \"\(title)\" for good: there is no Mole whitelist entry for it."
+        case .failedWhitelistRestore(let run, let restore): "\(run) Burrow couldn't put your Mole whitelist back. \(restore)"
         }
     }
 }
@@ -73,7 +79,13 @@ public struct CleanJob: MoleJob {
         return owner.keepPatterns ?? [owner.root]
     }
 
-    public func alwaysKeep(_ item: ScanItem) throws { try keeps.add(keepPatterns(for: item)) }
+    /// Writes the row to Burrow's "always keep" block. Throws instead of failing quietly, so the caller can
+    /// tell the user and keep the row ticked.
+    public func alwaysKeep(_ item: ScanItem) throws {
+        let patterns = keepPatterns(for: item)
+        guard !patterns.isEmpty else { throw CleanJobError.cannotKeep(item.title) }
+        try keeps.add(patterns)
+    }
 
     // MARK: Scan
 
@@ -126,7 +138,14 @@ public struct CleanJob: MoleJob {
 
     func execute(selection: Set<ScanItem.ID>, scan: ScanResult, emit: @escaping @Sendable (JobEvent) -> Void) async throws -> RunResult {
         let unticked = scan.allItems.filter { $0.selectable && !selection.contains($0.id) }
-        guard !unticked.isEmpty else { return try await runClean(emit: emit) }
+        let kept = scan.allItems.filter { selection.contains($0.id) }
+
+        // Every real run previews again first, even with nothing unticked: Mole's list must still be what was reviewed.
+        guard !unticked.isEmpty else {
+            emit(.status("Checking your selection"))
+            try await verify(reviewed: scan, unticked: [], kept: kept, emit: emit)
+            return try await runClean(emit: emit)
+        }
 
         var patterns: [String] = []
         for item in unticked {
@@ -143,36 +162,42 @@ public struct CleanJob: MoleJob {
         let outcome: Result<RunResult, Error>
         do {
             emit(.status("Checking your selection"))
-            try await verify(unticked: unticked, kept: scan.allItems.filter { selection.contains($0.id) }, emit: emit)
+            try await verify(reviewed: scan, unticked: unticked, kept: kept, emit: emit)
+            // Mole reads the whitelist when it starts, so the protection must still be in the file at that moment.
+            try transaction.confirmIntact(extraPatterns: patterns)
             outcome = .success(try await runClean(emit: emit))
         } catch {
             outcome = .failure(error)
         }
 
-        var restoreFailure: Error?
-        do { try transaction.restore() } catch { restoreFailure = error }
+        var restoreProblem: String?
+        do { try transaction.restore() } catch { restoreProblem = Self.restoreMessage(error, transaction: transaction) }
 
         switch outcome {
         case .success(var result):
-            if let restoreFailure {
-                result.problems.append("Burrow couldn't put your Mole whitelist back (\(restoreFailure.localizedDescription)). It will retry the next time it opens.")
-            }
+            if let restoreProblem { result.problems.append("Burrow couldn't put your Mole whitelist back. \(restoreProblem)") }
             return result
         case .failure(let error):
-            throw error
+            guard let restoreProblem else { throw error }
+            throw CleanJobError.failedWhitelistRestore(run: error.localizedDescription, restore: restoreProblem)
         }
     }
 
-    /// What goes into the whitelist for an unticked row: the exact paths Mole listed.
+    private static func restoreMessage(_ error: Error, transaction: WhitelistTransaction) -> String {
+        transaction.isActive ? "\(error.localizedDescription) It will retry the next time it opens." : error.localizedDescription
+    }
+
+    /// What goes into the whitelist for an unticked row: its owner folder (so files Mole writes later stay
+    /// protected) and the exact paths Mole listed.
     func whitelistPatterns(for item: ScanItem) -> [String] {
         // Mole checks the Trash folder itself, not the items inside it.
         if item.id == CleanScanBuilder.trashID { return [home + "/.Trash"] }
-        return item.paths
+        return keepPatterns(for: item) + item.paths
     }
 
     // MARK: Verify
 
-    private func verify(unticked: [ScanItem], kept: [ScanItem], emit: @escaping @Sendable (JobEvent) -> Void) async throws {
+    private func verify(reviewed scan: ScanResult, unticked: [ScanItem], kept: [ScanItem], emit: @escaping @Sendable (JobEvent) -> Void) async throws {
         let started = Date()
         let (code, output) = try await runner.run(["clean", "--dry-run"], environment: Self.environment)
         guard code == 0 else { throw BurrowError.processFailed(exitCode: code, output: output) }
@@ -189,12 +214,65 @@ public struct CleanJob: MoleJob {
             )
         }
 
+        // Anything else Mole would clean must belong to a row the reviewed scan showed as ticked.
+        let unreviewed = Self.unreviewed(in: list, dryRun: dryRun, scan: scan, unticked: unticked, home: home)
+        if !unreviewed.isEmpty {
+            let shown = unreviewed.prefix(3).joined(separator: ", ")
+            throw BurrowError.selectionMismatch(
+                expected: "only the items from this scan",
+                actual: "\(unreviewed.count) \(unreviewed.count == 1 ? "item" : "items") outside it (\(shown)). Rescan and review again"
+            )
+        }
+
         // Mole also keeps the parent folder of anything whitelisted, so a ticked row can be spared too.
         let remaining = list.allPaths
         let spared = kept.filter { !$0.paths.isEmpty && $0.paths.allSatisfy { !remaining.contains($0) } && !$0.id.hasPrefix(CleanScanBuilder.commandPrefix) }
         if !spared.isEmpty {
             emit(.line("Mole will also keep: " + spared.map(\.title).joined(separator: ", ")))
         }
+    }
+
+    /// Paths and tool commands Mole would clean that the reviewed scan does not show as ticked. Flagged: a path under
+    /// an unticked row, a path whose owner (folder) the scan never showed, and a command row the scan never listed.
+    /// A new file under an owner the user ticked is not flagged here.
+    static func unreviewed(in list: CleanList, dryRun: CleanDryRun, scan: ScanResult, unticked: [ScanItem], home: String) -> [String] {
+        let untickedIDs = Set(unticked.map(\.id))
+        var reviewedOwners = Set<String>()
+        var untickedOwners = Set<String>()
+        var reviewedPaths = Set<String>()
+        var reviewedCommands = Set<String>()
+        for item in scan.allItems {
+            if item.id.hasPrefix(CleanScanBuilder.commandPrefix) { reviewedCommands.insert(item.id); continue }
+            if item.id.hasPrefix(CleanScanBuilder.infoPrefix) { continue }
+            reviewedPaths.formUnion(item.paths)
+            var owners = Set(item.paths.map { CleanOwnerResolver.resolve(path: $0, home: home).key })
+            if !item.id.hasPrefix(CleanScanBuilder.emptyPrefix) {
+                owners.insert(String(item.id.dropFirst(CleanScanBuilder.idPrefix.count)))
+            }
+            if untickedIDs.contains(item.id) { untickedOwners.formUnion(owners) } else { reviewedOwners.formUnion(owners) }
+        }
+
+        var found: [String] = []
+        for entry in list.allEntries {
+            let counted = CleanOwnerResolver.resolve(path: entry.countedUnder ?? entry.path, home: home).key
+            let own = CleanOwnerResolver.resolve(path: entry.path, home: home).key
+            if untickedOwners.contains(counted) || untickedOwners.contains(own) {
+                found.append(entry.path)
+            } else if !(reviewedOwners.contains(counted) || reviewedOwners.contains(own) || reviewedPaths.contains(entry.path)) {
+                found.append(entry.path)
+            }
+        }
+
+        for row in dryRun.categories.flatMap(\.rows) where row.kind == .wouldClean || row.kind == .wouldCleanup {
+            guard row.bytes == nil, row.count == nil else { continue }
+            let id = CleanScanBuilder.commandPrefix + row.label.lowercased()
+            if reviewedCommands.contains(id) { continue }
+            // A tool whose folder is already a path row (Homebrew) is folded into that row, so it was reviewed.
+            let folders = (CleanToolCaches.patterns(forLabel: row.label, home: home) ?? []).map { $0.hasSuffix("/*") ? String($0.dropLast(2)) : $0 }
+            if folders.contains(where: { reviewedPaths.contains($0) }) { continue }
+            found.append(row.label)
+        }
+        return found
     }
 
     /// Titles of unticked rows that Mole would still clean after the whitelist was extended.

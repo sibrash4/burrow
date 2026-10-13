@@ -156,9 +156,23 @@ final class ScriptedMoleTests: XCTestCase {
 
     // MARK: Clean
 
+    /// Answers the fresh preview every clean run makes first: a completed dry run whose list matches `oneItemScan`.
+    private struct PreviewRunner: CommandRunning {
+        let listURL: URL
+        func run(_ args: [String], environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
+            guard args == ["clean", "--dry-run"] else {
+                XCTFail("only the clean preview is expected: \(args)")
+                return (1, "")
+            }
+            try "=== g ===\n/tmp/x  # 1.0MB\n".write(to: listURL, atomically: true, encoding: .utf8)
+            return (0, "Dry run complete - no changes made\nPotential space: 1.0MB | Items: 1 | Categories: 1\n")
+        }
+    }
+
     private func cleanJob(_ script: String) throws -> CleanJob {
-        CleanJob(runner: NoRunner(), launcher: try launcher(script),
-                 cleanListURL: directory.appendingPathComponent("clean-list.txt"),
+        let list = directory.appendingPathComponent("clean-list.txt")
+        return CleanJob(runner: PreviewRunner(listURL: list), launcher: try launcher(script),
+                 cleanListURL: list,
                  whitelistURL: directory.appendingPathComponent("whitelist"),
                  backupURL: directory.appendingPathComponent("whitelist.backup"),
                  home: directory.path, pollSeconds: 0.05, drainSeconds: 0.2)

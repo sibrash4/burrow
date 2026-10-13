@@ -95,10 +95,11 @@ final class CleanJobTests: TempDirTestCase {
         let (job, mole, launcher) = try setUpJob(whitelistContent: original)
         let scan = try await job.scan()
         let callsAfterScan = mole.calls.count
+        let everything = Set(scan.allItems.filter(\.selectable).map(\.id))
 
-        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+        let events = try await collectEvents(job.run(selection: everything, from: scan))
 
-        XCTAssertEqual(mole.calls.count, callsAfterScan, "no extra preview when nothing is protected")
+        XCTAssertEqual(mole.calls.count, callsAfterScan + 1, "one fresh preview before the run, even when nothing is protected")
         XCTAssertEqual(launcher.launches, [["clean"]])
         XCTAssertEqual(try bytes(), original)
         XCTAssertFalse(backupExists)
@@ -155,7 +156,9 @@ final class CleanJobTests: TempDirTestCase {
     func testVerificationMismatchStopsBeforeCleaningAndRestores() async throws {
         let (job, mole, launcher) = try setUpJob(whitelistContent: original)
         let scan = try await job.scan()
-        let chosen = try selection(scan, without: ["Claude logs"])
+        // Trash is ticked here, so the only unticked row is Claude logs.
+        var chosen = try selection(scan, without: ["Claude logs"])
+        chosen.insert(try item("Trash", in: scan).id)
         mole.honorsWhitelist = false
 
         do {
@@ -189,20 +192,184 @@ final class CleanJobTests: TempDirTestCase {
 
     func testRowsThatCannotBeProtectedAreNeverWhitelisted() async throws {
         let (job, _, launcher) = try setUpJob(whitelistContent: original)
-        let scan = ScanResult(kind: .clean, groups: [ScanGroup(id: "g", title: "Developer tools", items: [
-            ScanItem(id: "clean:cmd:mystery", title: "mystery cache", selectable: false, selectedByDefault: true, note: "Always cleaned by Mole"),
-            ScanItem(id: "clean:x", title: "Claude logs", paths: ["/Users/test/Library/Logs/Claude-3p"]),
-        ])])
+        var scan = try await job.scan()
+        // Mole always runs this command, so it can't be whitelisted. It must never be protected by mistake.
+        scan.groups[0].items.append(ScanItem(
+            id: "clean:cmd:mystery", title: "mystery cache", selectable: false, selectedByDefault: true, note: "Always cleaned by Mole"
+        ))
+        let chosen = try selection(scan, without: ["Claude logs"])
 
         let whitelistAtLaunch = LockedBox<String?>(nil)
         let whitelistFile = whitelist
         launcher.onLaunch = { whitelistAtLaunch.set(try? String(contentsOf: whitelistFile, encoding: .utf8)) }
-        // Neither row is in the selection: only the selectable one is protected.
-        _ = try? await collectEvents(job.run(selection: [], from: scan))
+        _ = try await collectEvents(job.run(selection: chosen, from: scan))
 
         let during = try XCTUnwrap(whitelistAtLaunch.get())
         XCTAssertTrue(during.contains("/Users/test/Library/Logs/Claude-3p"))
         XCTAssertFalse(during.contains("mystery"))
+    }
+
+    // MARK: Review guards
+
+    func testDefaultSelectionKeepsTheTrashUnlessItIsTicked() async throws {
+        let (job, _, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        let whitelistAtLaunch = LockedBox<String?>(nil)
+        let whitelistFile = whitelist
+        launcher.onLaunch = { whitelistAtLaunch.set(try? String(contentsOf: whitelistFile, encoding: .utf8)) }
+
+        _ = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+
+        let during = try XCTUnwrap(whitelistAtLaunch.get())
+        XCTAssertTrue(during.contains("\n/Users/test/.Trash\n"), "Mole empties the whole Trash, so an unticked Trash must be protected")
+    }
+
+    func testUntickedRowIsWhitelistedByItsOwnerFolderAsWellAsItsPaths() throws {
+        let (job, _, _) = try setUpJob()
+        let item = ScanItem(id: "clean:Library/Caches/Foo", title: "Foo cache", paths: ["/Users/test/Library/Caches/Foo/a"])
+        XCTAssertEqual(job.whitelistPatterns(for: item), ["/Users/test/Library/Caches/Foo", "/Users/test/Library/Caches/Foo/a"])
+    }
+
+    func testNewOwnerAppearingAfterTheScanStopsTheRunBeforeMoleCleans() async throws {
+        let (job, mole, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        mole.extraEntries = ["/Users/test/Library/Caches/NewApp/cache.db  # 5.0MB"]
+
+        do {
+            _ = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+            XCTFail("expected selectionMismatch")
+        } catch BurrowError.selectionMismatch(_, let actual) {
+            XCTAssertTrue(actual.contains("/Users/test/Library/Caches/NewApp/cache.db"))
+            XCTAssertTrue(actual.contains("Rescan"))
+        }
+        XCTAssertTrue(launcher.launches.isEmpty, "nothing was cleaned")
+        XCTAssertEqual(try bytes(), original)
+        XCTAssertFalse(backupExists)
+    }
+
+    func testUnreviewedFlagsOnlyOwnersAndCommandsTheScanDidNotTick() throws {
+        let scan = try CleanFixtures.scan()
+        let unticked = [try item("Claude logs", in: scan)]
+        let list = CleanListParser.parse("""
+        === App caches ===
+        /Users/test/Library/Caches/Google/Chrome/Default/new  # 1.0MB
+        /Users/test/Library/Logs/Claude-3p/new.log  # 2.0MB
+        /Users/test/Library/Caches/NewApp/x  # 3.0MB
+        """)
+        let dryRun = CleanDryRunParser.parse("""
+        ➤ Developer tools
+          → npm cache · would clean
+          → mystery tool cache · would clean
+        """)
+
+        let found = CleanJob.unreviewed(in: list, dryRun: dryRun, scan: scan, unticked: unticked, home: "/Users/test")
+
+        XCTAssertEqual(found, [
+            "/Users/test/Library/Logs/Claude-3p/new.log",
+            "/Users/test/Library/Caches/NewApp/x",
+            "mystery tool cache",
+        ], "a new file under a ticked folder is not flagged; the rest are")
+    }
+
+    func testEveryRealRunIsPreviewedFirstEvenWhenEverythingIsTicked() async throws {
+        let (job, mole, _) = try setUpJob()
+        let scan = try await job.scan()
+        mole.extraEntries = ["/Users/test/Library/Caches/NewApp/cache.db  # 5.0MB"]
+
+        do {
+            _ = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+            XCTFail("expected selectionMismatch")
+        } catch BurrowError.selectionMismatch {
+        }
+        XCTAssertEqual(mole.calls.count, 2, "scan, then the preview before the run")
+    }
+
+    func testWhitelistEditedBeforeTheRunStopsBeforeMoleIsLaunched() async throws {
+        let (job, mole, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        let chosen = try selection(scan, without: ["Claude logs"])
+        let whitelistFile = whitelist
+        // The verification preview is call 2. Right after it, the protection block disappears from the file.
+        mole.onRun = { call in
+            if call == 2 { try? Data("# edited by the user\n".utf8).write(to: whitelistFile) }
+        }
+
+        do {
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
+            XCTFail("expected an error")
+        } catch let error as CleanJobError {
+            guard case .failedWhitelistRestore(_, let restore) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(restore.contains("changed during the clean"))
+        }
+        XCTAssertTrue(launcher.launches.isEmpty, "Mole was never started")
+        XCTAssertEqual(try text(), "# edited by the user\n", "the user's edit is not overwritten")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: transaction().unrestoredURL.path))
+    }
+
+    func testRunFailureThatAlsoFailsToRestoreTheWhitelistSaysSo() async throws {
+        let (job, _, launcher) = try setUpJob(session: nil, whitelistContent: original)
+        let scan = try await job.scan()
+        let chosen = try selection(scan, without: ["Claude logs"])
+        let whitelistFile = whitelist
+        launcher.onLaunch = { try? Data("# edited by the user\n".utf8).write(to: whitelistFile) }
+
+        do {
+            _ = try await collectEvents(job.run(selection: chosen, from: scan))
+            XCTFail("expected an error")
+        } catch let error as CleanJobError {
+            guard case .failedWhitelistRestore(let run, let restore) = error else { return XCTFail("\(error)") }
+            XCTAssertTrue(run.contains("Mole isn't installed"))
+            XCTAssertTrue(restore.contains("changed during the clean"))
+            XCTAssertTrue(error.localizedDescription.contains("couldn't put your Mole whitelist back"))
+        }
+        XCTAssertEqual(try text(), "# edited by the user\n")
+    }
+
+    func testSuccessfulRunReportsAWhitelistThatCouldNotBeRestored() async throws {
+        let (job, _, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        let chosen = try selection(scan, without: ["Claude logs"])
+        let whitelistFile = whitelist
+        launcher.onLaunch = { try? Data("# edited by the user\n".utf8).write(to: whitelistFile) }
+
+        let events = try await collectEvents(job.run(selection: chosen, from: scan))
+
+        let result = try XCTUnwrap(events.result)
+        XCTAssertTrue(result.problems.contains { $0.contains("couldn't put your Mole whitelist back") })
+    }
+
+    // MARK: Always keep, errors reach the caller
+
+    func testAlwaysKeepThrowsWhenTheWhitelistCannotBeEdited() async throws {
+        let notText = Data([0xFF, 0xFE, 0x41])
+        let (job, _, _) = try setUpJob(whitelistContent: notText)
+        let scan = try await job.scan()
+
+        XCTAssertThrowsError(try job.alwaysKeep(try item("Claude logs", in: scan))) { error in
+            XCTAssertEqual(error as? WhitelistError, .notUTF8)
+        }
+        XCTAssertEqual(try bytes(), notText)
+    }
+
+    func testAlwaysKeepIsRefusedWhileARunIsOpen() async throws {
+        let (job, _, _) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        try transaction().begin(extraPatterns: ["/Users/test/x"])
+
+        XCTAssertThrowsError(try job.alwaysKeep(try item("Claude logs", in: scan))) { error in
+            XCTAssertEqual(error as? WhitelistError, .transactionInProgress)
+        }
+        try transaction().restore()
+    }
+
+    func testAlwaysKeepThrowsForARowWithNothingToKeep() async throws {
+        let (job, _, _) = try setUpJob()
+        let scan = try await job.scan()
+
+        XCTAssertThrowsError(try job.alwaysKeep(try item("Mail data", in: scan))) { error in
+            XCTAssertEqual(error as? CleanJobError, .cannotKeep("Mail data"))
+        }
+        XCTAssertFalse(whitelistExists, "nothing was written")
     }
 
     func testRestoresWhenTheLaunchFails() async throws {

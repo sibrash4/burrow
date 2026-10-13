@@ -79,6 +79,9 @@ final class CleanScanBuilderTests: XCTestCase {
         XCTAssertEqual(trash.paths.count, 58)
         XCTAssertTrue(trash.paths.allSatisfy { $0.hasPrefix("/Users/test/.Trash/") })
         XCTAssertTrue(trash.selectable)
+        XCTAssertFalse(trash.selectedByDefault, "emptying the Trash is never on by default")
+        XCTAssertEqual(trash.note, "Empties the Trash permanently (58 items)")
+        XCTAssertFalse(try CleanFixtures.scan().defaultSelection.contains(trash.id))
     }
 
     func testFriendlyTitles() throws {
@@ -161,9 +164,9 @@ final class CleanScanBuilderTests: XCTestCase {
         XCTAssertEqual(mail.bytes, 1_080_000_000)
     }
 
-    func testDefaultSelectionCoversEveryCleanableRow() throws {
+    func testDefaultSelectionCoversEveryCleanableRowExceptTheTrash() throws {
         let scan = try CleanFixtures.scan()
-        let cleanable = scan.allItems.filter(\.selectable)
+        let cleanable = scan.allItems.filter { $0.selectable && $0.id != CleanScanBuilder.trashID }
         XCTAssertEqual(scan.defaultSelection, Set(cleanable.map(\.id)))
     }
 
