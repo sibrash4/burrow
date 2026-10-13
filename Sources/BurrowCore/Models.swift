@@ -4,7 +4,7 @@
 import Foundation
 
 public enum JobKind: String, CaseIterable, Identifiable, Sendable {
-    case clean, purge, installers, uninstall
+    case clean, purge, installers, uninstall, aiLeftovers
 
     public var id: String { rawValue }
 
@@ -14,6 +14,7 @@ public enum JobKind: String, CaseIterable, Identifiable, Sendable {
         case .purge: "Purge"
         case .installers: "Installers"
         case .uninstall: "Uninstall"
+        case .aiLeftovers: "AI leftovers"
         }
     }
 
@@ -23,6 +24,7 @@ public enum JobKind: String, CaseIterable, Identifiable, Sendable {
         case .purge: "Build folders in your projects"
         case .installers: "Leftover .dmg, .pkg and .zip files"
         case .uninstall: "Apps and the files they leave behind"
+        case .aiLeftovers: "Old agent worktrees, transcripts and model caches"
         }
     }
 
@@ -32,6 +34,7 @@ public enum JobKind: String, CaseIterable, Identifiable, Sendable {
         case .purge: "shippingbox"
         case .installers: "opticaldiscdrive"
         case .uninstall: "trash"
+        case .aiLeftovers: "brain"
         }
     }
 }
