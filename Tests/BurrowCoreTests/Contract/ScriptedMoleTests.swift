@@ -253,4 +253,33 @@ final class ScriptedMoleTests: XCTestCase {
         consumer.cancel()
         try await waitFor("Mole to be terminated") { !self.isAlive(pid) }
     }
+
+    // MARK: Mole throws away keys typed right after a confirm prompt
+
+    func testEnterAfterTheConfirmPromptSurvivesMolesInputFlush() async throws {
+        let job = try uninstallJob(ScriptedMole.uninstallDrainingInput)
+        let events = try await drain(job.run(selection: ["org.herf.Flux"], from: fluxScan))
+        XCTAssertEqual(try XCTUnwrap(events.result).itemCount, 1)
+    }
+
+    func testControlWithoutTheGraceTimeTheFlushedEnterNeverArrives() async throws {
+        // Documents the hazard the grace time protects against: Enter pressed the instant the prompt shows
+        // is flushed away, and Mole waits forever (here: until the test's short removal timeout).
+        var timeouts = UninstallTimeouts()
+        timeouts.firstPrompt = 10; timeouts.preview = 10; timeouts.removal = 2; timeouts.poll = 0.05; timeouts.promptGrace = 0
+        let job = UninstallJob(runner: NoRunner(), launcher: try launcher(ScriptedMole.uninstallDrainingInput), timeouts: timeouts)
+        do {
+            _ = try await drain(job.run(selection: ["org.herf.Flux"], from: fluxScan))
+            XCTFail("expected the run to stall")
+        } catch BurrowError.timeout {
+        }
+    }
+
+    func testMenuRunEnterAlsoWaitsForAQuietScreen() async throws {
+        XCTAssertTrue(ScriptedMole.installerDrainingInput.contains("tcflush"), "the script must really flush input")
+        let job = InstallerJob(launcher: try launcher(ScriptedMole.installerDrainingInput), driver: MoleMenuDriver(settleTime: 0))
+        let scan = try await job.scan()
+        let events = try await drain(job.run(selection: ["b.zip | Downloads"], from: scan))
+        XCTAssertEqual(try XCTUnwrap(events.result).itemCount, 1)
+    }
 }

@@ -171,4 +171,28 @@ enum ScriptedMole {
     printf '\r\nUninstalling Flux...\r\n\r\n======\r\nUninstall complete\r\nRemoved 1 app, freed 5.90MB: Flux\r\n======\r\n'
     exit 0
     """#
+
+    /// Like `uninstall`, but copies Mole's `drain_pending_input` before the confirm prompt is read: a short
+    /// wait, then `tcflush(TCIFLUSH)`. Anything typed in that moment is thrown away.
+    static let uninstallDrainingInput = #"""
+    #!/bin/bash
+    [ -n "$BURROW_SCRIPT_PIDFILE" ] && echo $$ > "$BURROW_SCRIPT_PIDFILE"
+    printf '◎ Matched 1 app(s):\r\n1. Flux  5.8MB  |  Last: Today\r\n\r\nProceed with uninstallation? [y/N] '
+    IFS= read -r answer
+    if [ "$answer" != "y" ]; then printf '\r\nAborted.\r\n'; exit 0; fi
+    printf '\r\nFiles to be removed:\r\n\r\n◎ Flux , 5.9MB\r\n  ✓ /Applications/Flux.app , 5.8MB\r\n'
+    printf '\r\n➤ Remove 1 app, 5.9MB  Enter confirm, ESC cancel: '
+    /usr/bin/perl -MPOSIX=tcflush,TCIFLUSH -e 'select undef, undef, undef, 0.25; tcflush(0, TCIFLUSH)'
+    IFS= read -rsn1 k
+    if [ -n "$k" ]; then printf '\r\nCancelled\r\n'; exit 0; fi
+    printf '\r\nUninstalling Flux...\r\n\r\n======\r\nUninstall complete\r\nRemoved 1 app, freed 5.90MB: Flux\r\n======\r\n'
+    exit 0
+    """#
+
+    /// The installer look-alike with Mole's input flush before the "Delete N installers" prompt is read.
+    static var installerDrainingInput: String {
+        installer.replacingOccurrences(
+            of: "IFS= read -rsn1 k\nif [ -n \"$k\" ]; then printf '\\r\\nCancelled\\r\\n'; exit 0; fi",
+            with: "/usr/bin/perl -MPOSIX=tcflush,TCIFLUSH -e 'select undef, undef, undef, 0.25; tcflush(0, TCIFLUSH)'\nIFS= read -rsn1 k\nif [ -n \"$k\" ]; then printf '\\r\\nCancelled\\r\\n'; exit 0; fi")
+    }
 }

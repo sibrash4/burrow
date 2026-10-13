@@ -9,7 +9,7 @@ final class UninstallJobTests: XCTestCase {
 
     private func fastTimeouts() -> UninstallTimeouts {
         var t = UninstallTimeouts()
-        t.firstPrompt = 1; t.preview = 1; t.removal = 2; t.poll = 0.01
+        t.firstPrompt = 1; t.preview = 1; t.removal = 2; t.poll = 0.01; t.promptGrace = 0
         return t
     }
 
@@ -281,6 +281,34 @@ final class UninstallJobTests: XCTestCase {
         let leftovers = try await job.previewLeftovers(for: item)
         XCTAssertEqual(leftovers.count, 80)
         XCTAssertEqual(leftovers.first, "~/Library/Caches/com.example.alpha/file1, 1KB")
+    }
+
+    func testMoleFinishingCleanlyWithoutAskingIsNotReportedAsACrash() async throws {
+        let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
+        let session = UninstallFakeSession(frame: "Scanning applications...")
+        session.show("Nothing to do here.\n")
+        session.exit(0)
+        let (job, _) = job(session: session)
+        do {
+            _ = try await collect(job.run(selection: Set(scan.allItems.map(\.id)), from: scan))
+            XCTFail("expected previewUnavailable")
+        } catch UninstallError.previewUnavailable(let why) {
+            XCTAssertEqual(why, "Nothing to do here.")
+        }
+        XCTAssertFalse(session.sent.contains("\r"), "Enter must never be sent")
+    }
+
+    func testMoleCrashingBeforeTheFirstPromptKeepsItsExitCode() async throws {
+        let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
+        let session = UninstallFakeSession(frame: "Scanning applications...")
+        session.exit(5)
+        let (job, _) = job(session: session)
+        do {
+            _ = try await collect(job.run(selection: Set(scan.allItems.map(\.id)), from: scan))
+            XCTFail("expected processFailed")
+        } catch BurrowError.processFailed(let code, _) {
+            XCTAssertEqual(code, 5)
+        }
     }
 
     func testPreviewLeftoversReportsMoleDyingAsAnError() async throws {

@@ -28,6 +28,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
     <key>NSHighResolutionCapable</key><true/>
     <key>NSPrincipalClass</key><string>NSApplication</string>
     <key>LSApplicationCategoryType</key><string>public.app-category.utilities</string>
+    <key>NSAppleEventsUsageDescription</key><string>Mole asks System Events which apps are open so it does not clean data that an open app is using. Burrow never sends Apple events itself.</string>
 </dict>
 </plist>
 PLIST

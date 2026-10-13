@@ -2,7 +2,7 @@ import XCTest
 @testable import BurrowCore
 
 final class MoleMenuDriverTests: XCTestCase {
-    private let driver = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3, settleTime: 0)
+    private let driver = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3, settleTime: 0, promptGrace: 0)
 
     private func installers(_ count: Int = 12, selected: Set<Int> = []) -> [FakeMenuItem] {
         (0..<count).map { FakeMenuItem(name: "app\($0).dmg", location: "Downloads", selected: selected.contains($0)) }

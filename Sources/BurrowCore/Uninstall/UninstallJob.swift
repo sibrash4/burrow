@@ -9,6 +9,8 @@ public struct UninstallTimeouts: Sendable {
     public var removal: TimeInterval = 1800
     /// How often the removal phase checks for a password prompt.
     public var poll: TimeInterval = 0.2
+    /// How long the confirm screen must be quiet before Enter is pressed. Mole flushes keys typed right after it.
+    public var promptGrace: TimeInterval = PromptTiming.defaultGrace
 
     public init() {}
 }
@@ -192,6 +194,7 @@ public struct UninstallJob: MoleJob {
             )
         }
 
+        try await PromptTiming.waitUntilQuiet(session, grace: timeouts.promptGrace)
         let confirmedAt = session.transcript().count
         try session.send(TerminalKey.enter)
         continuation.yield(.status("Removing \(names.count == 1 ? names[0] : "\(names.count) apps")"))
@@ -278,8 +281,14 @@ public struct UninstallJob: MoleJob {
         }
     }
 
+    /// Waits for one of `markers` on screen. If Mole exits first, a non-zero code stays `processFailed`; a clean
+    /// exit (code 0) means Mole finished without asking anything, so nothing was removed and the user is told that.
     private static func wait(_ session: InteractiveSession, _ timeout: TimeInterval, _ markers: [String]) async throws -> String {
-        try await session.waitForFrame(timeout: timeout) { frame in markers.contains { frame.contains($0) } }
+        do {
+            return try await session.waitForFrame(timeout: timeout) { frame in markers.contains { frame.contains($0) } }
+        } catch BurrowError.processFailed(let code, let output) where code == 0 {
+            throw UninstallError.previewUnavailable(UninstallOutput.lines(output).last ?? "Mole finished without asking")
+        }
     }
 
     private static func forward(_ lines: AsyncStream<String>, to continuation: AsyncThrowingStream<JobEvent, Error>.Continuation) async {

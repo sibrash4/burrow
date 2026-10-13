@@ -98,6 +98,8 @@ enum MenuJobRun {
                     }
 
                     continuation.yield(.status(spec.label))
+                    // Mole drops keys that arrive just after a prompt appears; let the screen go quiet first.
+                    try await PromptTiming.waitUntilQuiet(session, grace: driver.promptGrace)
                     let runMark = session.transcript().utf8.count
                     try session.send(TerminalKey.enter)
 

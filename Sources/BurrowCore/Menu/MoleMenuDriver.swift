@@ -25,11 +25,15 @@ public struct MoleMenuDriver: Sendable {
     /// the bottom never leave the screen, so "footer visible" does not mean "redraw finished". Seen live:
     /// the new cursor row next to the previous row's Path. Zero turns this off (fake sessions in tests).
     public var settleTime: TimeInterval
+    /// How long the confirm screen must be quiet before Enter is pressed on it. See `PromptTiming`.
+    public var promptGrace: TimeInterval
 
-    public init(firstFrameTimeout: TimeInterval = 180, frameTimeout: TimeInterval = 8, settleTime: TimeInterval = 0.15) {
+    public init(firstFrameTimeout: TimeInterval = 180, frameTimeout: TimeInterval = 8, settleTime: TimeInterval = 0.15,
+                promptGrace: TimeInterval = PromptTiming.defaultGrace) {
         self.firstFrameTimeout = firstFrameTimeout
         self.frameTimeout = frameTimeout
         self.settleTime = settleTime
+        self.promptGrace = promptGrace
     }
 
     /// Makes exactly `wanted` selected, checks it twice, then presses Enter.

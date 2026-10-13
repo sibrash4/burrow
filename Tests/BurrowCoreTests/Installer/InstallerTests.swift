@@ -2,7 +2,7 @@ import XCTest
 @testable import BurrowCore
 
 final class InstallerTests: XCTestCase {
-    private let fast = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3, settleTime: 0)
+    private let fast = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3, settleTime: 0, promptGrace: 0)
 
     private func fixtureEntries() throws -> [MenuEntry] {
         InstallerParser.entries(fromFrame: MenuFixtures.stripped(try MenuFixtures.text("installer_dryrun")))
