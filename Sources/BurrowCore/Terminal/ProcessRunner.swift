@@ -55,19 +55,21 @@ public struct ProcessRunner: CommandRunning {
     }
 }
 
+/// One child process, started as the leader of its own process group so that cancelling can reach
+/// everything it starts. Uses posix_spawn because Foundation's `Process` cannot set the group.
 private final class RunningProcess: @unchecked Sendable {
-    private let process = Process()
-    private let output = Pipe()
+    private let executable: URL
+    private let args: [String]
+    private let environment: [String: String]
     private let lock = NSLock()
     private var cancelled = false
+    /// The group id, which is also the child's pid. Zero until the child has been spawned.
+    private var group: pid_t = 0
 
     init(executable: URL, args: [String], environment: [String: String]) {
-        process.executableURL = executable
-        process.arguments = args
-        process.environment = environment
-        process.standardInput = FileHandle.nullDevice
-        process.standardOutput = output
-        process.standardError = output
+        self.executable = executable
+        self.args = args
+        self.environment = environment
     }
 
     var wasCancelled: Bool {
@@ -77,34 +79,121 @@ private final class RunningProcess: @unchecked Sendable {
 
     /// Blocks the calling thread until the process exits and its output is fully read.
     func runToCompletion() throws -> (Int32, Data) {
-        let exited = DispatchSemaphore(value: 0)
-        process.terminationHandler = { _ in exited.signal() }
+        var fds: [Int32] = [0, 0]
+        guard pipe(&fds) == 0 else { throw Self.failure(errno) }
+        let readEnd = fds[0], writeEnd = fds[1]
+        let input = open("/dev/null", O_RDONLY)
+        guard input >= 0 else {
+            let code = errno
+            close(readEnd)
+            close(writeEnd)
+            throw Self.failure(code)
+        }
 
         lock.lock()
-        if cancelled { lock.unlock(); throw BurrowError.cancelled }
-        do { try process.run() } catch {
+        if cancelled {
             lock.unlock()
-            throw BurrowError.processFailed(exitCode: -1, output: error.localizedDescription)
+            close(readEnd)
+            close(writeEnd)
+            close(input)
+            throw BurrowError.cancelled
         }
+        let (pid, error) = spawn(input: input, output: writeEnd)
+        if error == 0 { group = pid }
         lock.unlock()
 
-        // The write end must be closed in this process or reading never reaches EOF.
-        try? output.fileHandleForWriting.close()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        exited.wait()
-        return (process.terminationStatus, data)
+        // The parent keeps only the read end. Reading reaches EOF once every process in the group has closed its output.
+        close(input)
+        close(writeEnd)
+        guard error == 0 else {
+            close(readEnd)
+            throw Self.failure(error)
+        }
+
+        let data = drain(readEnd)
+        return (reap(pid), data)
+    }
+
+    /// Reads until the pipe reaches EOF, which happens once every process in the group has closed its output.
+    /// After cancellation it gives up waiting for EOF after a short grace period, so a helper that left the group
+    /// (setsid, daemonised) cannot hold the cancelled call open. Closes `fd` in every case.
+    private func drain(_ fd: Int32) -> Data {
+        defer { close(fd) }
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+        var cancelledAt: Date?
+        while true {
+            // Checked on every pass, so a helper that keeps writing cannot hold a cancelled call open either.
+            if wasCancelled {
+                let start = cancelledAt ?? Date()
+                cancelledAt = start
+                if Date().timeIntervalSince(start) > 3 { break }
+            }
+            var poller = pollfd(fd: fd, events: Int16(POLLIN), revents: 0)
+            guard poll(&poller, 1, 50) > 0 else { continue }
+            let count = read(fd, &buffer, buffer.count)
+            if count > 0 { data.append(buffer, count: count); continue }
+            if count == 0 || (errno != EINTR && errno != EAGAIN) { break }
+        }
+        return data
     }
 
     func cancel() {
         lock.lock()
         cancelled = true
-        let running = process.isRunning
+        let pgid = group
         lock.unlock()
-        guard running else { return }
-        process.terminate()
-        let pid = process.processIdentifier
-        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [process] in
-            if process.isRunning { kill(pid, SIGKILL) }
-        }
+        // Not spawned yet. runToCompletion checks `cancelled` under the same lock and never starts the child.
+        guard pgid > 0 else { return }
+        // Signal the whole group: helpers Mole starts hold the output pipe too, and reading only ends when they exit.
+        _ = killpg(pgid, SIGTERM)
+        // Anything in the group that ignores SIGTERM is killed after 2 s. The group is signalled even if the leader
+        // has already exited, because a helper may still hold the pipe open.
+        DispatchQueue.global().asyncAfter(deadline: .now() + 2) { _ = killpg(pgid, SIGKILL) }
+    }
+
+    /// Called with the lock held, so `cancel()` sees the group as soon as it exists. Stdin is /dev/null and stdout
+    /// and stderr go to `output`. The group is set before exec, so the child is never outside it.
+    private func spawn(input: Int32, output: Int32) -> (pid: pid_t, error: Int32) {
+        var actions: posix_spawn_file_actions_t? = nil
+        posix_spawn_file_actions_init(&actions)
+        defer { posix_spawn_file_actions_destroy(&actions) }
+        posix_spawn_file_actions_adddup2(&actions, input, 0)
+        posix_spawn_file_actions_adddup2(&actions, output, 1)
+        posix_spawn_file_actions_adddup2(&actions, output, 2)
+
+        var attributes: posix_spawnattr_t? = nil
+        posix_spawnattr_init(&attributes)
+        defer { posix_spawnattr_destroy(&attributes) }
+        posix_spawnattr_setpgroup(&attributes, 0)
+        // The child must not inherit this thread's blocked signals or ignored dispositions. A blocked SIGTERM would
+        // make cancel() wait for the 2 s SIGKILL instead of stopping the group at once.
+        var allSignals = sigset_t(), noSignals = sigset_t()
+        sigfillset(&allSignals)
+        sigemptyset(&noSignals)
+        posix_spawnattr_setsigdefault(&attributes, &allSignals)
+        posix_spawnattr_setsigmask(&attributes, &noSignals)
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETPGROUP | POSIX_SPAWN_CLOEXEC_DEFAULT
+            | POSIX_SPAWN_SETSIGDEF | POSIX_SPAWN_SETSIGMASK))
+
+        let argv: [UnsafeMutablePointer<CChar>?] = ([executable.path] + args).map { strdup($0) } + [nil]
+        let envp: [UnsafeMutablePointer<CChar>?] = environment.map { strdup("\($0.key)=\($0.value)") } + [nil]
+        defer { (argv + envp).forEach { free($0) } }
+
+        var pid: pid_t = 0
+        let status = posix_spawn(&pid, executable.path, &actions, &attributes, argv, envp)
+        return status == 0 ? (pid, 0) : (-1, status)
+    }
+
+    /// Waits for the child and returns its exit code, or the signal it died from (what `Process` reported).
+    private func reap(_ pid: pid_t) -> Int32 {
+        var status: Int32 = 0
+        while waitpid(pid, &status, 0) < 0 && errno == EINTR {}
+        let signal = status & 0x7F
+        return signal == 0 ? (status >> 8) & 0xFF : signal
+    }
+
+    private static func failure(_ code: Int32) -> BurrowError {
+        .processFailed(exitCode: -1, output: String(cString: strerror(code)))
     }
 }

@@ -100,7 +100,7 @@ enum MenuJobRun {
                     continuation.yield(.status(spec.label))
                     // Mole drops keys that arrive just after a prompt appears; let the screen go quiet first.
                     try await PromptTiming.waitUntilQuiet(session, grace: driver.promptGrace)
-                    let runMark = session.transcript().utf8.count
+                    let runMark = completedLength(session.transcript())
                     try session.send(TerminalKey.enter)
 
                     var emitted = runMark
@@ -127,6 +127,15 @@ enum MenuJobRun {
                 box.terminate()
             }
         }
+    }
+
+    /// Byte length of the transcript up to and including its last newline. The line still being typed is left out.
+    /// Mole's installer confirm prompt is that unfinished line, and on Enter Mole erases it (`ESC[K`) before the run
+    /// prints, which shortens the transcript. A mark taken after the prompt would then skip the start of the run.
+    private static func completedLength(_ transcript: String) -> Int {
+        let bytes = transcript.utf8
+        guard let last = bytes.lastIndex(of: 10) else { return 0 }
+        return bytes.distance(from: bytes.startIndex, to: last) + 1
     }
 
     /// Emits the complete lines after `offset` bytes (everything when `final`) and returns the new offset.

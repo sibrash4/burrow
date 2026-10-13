@@ -90,6 +90,83 @@ final class ProcessRunnerTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(started), 10)
     }
 
+    /// F20: cancel must signal the whole process group. A helper started by the shell used to survive cancellation,
+    /// and it kept the output pipe open, so the cancelled run did not resume until that helper exited.
+    func testCancellationKillsHelpersInTheProcessGroup() async throws {
+        let dir = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pidFile = dir.appendingPathComponent("helper.pid")
+        let runner = sh()
+        let task = Task {
+            try await runner.run(["-c", "sleep 30 & echo $! > '\(pidFile.path)'; wait"], environment: [:])
+        }
+
+        var helper: pid_t = 0
+        for _ in 0..<200 {
+            if let text = try? String(contentsOf: pidFile, encoding: .utf8),
+               let value = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                helper = value
+                break
+            }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertGreaterThan(helper, 0, "helper pid was never written")
+
+        let started = Date()
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch BurrowError.cancelled {
+        } catch {
+            XCTFail("\(error)")
+        }
+        // SIGTERM must reach the group at once. A helper that ignored it would only die at the 2 s SIGKILL.
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1.5, "cancel should stop the group with SIGTERM, not SIGKILL")
+
+        // The helper was in the cancelled group, so it must be gone. launchd reaps it, so allow a short wait.
+        var gone = false
+        for _ in 0..<120 {
+            if kill(helper, 0) == -1 && errno == ESRCH { gone = true; break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertTrue(gone, "helper \(helper) survived cancellation")
+    }
+
+    /// A helper that leaves the process group (setsid) keeps the output pipe open. Cancelling must still resume
+    /// the call promptly instead of waiting for that helper to exit (it sleeps 30 s).
+    func testCancelResumesWhenAHelperEscapesTheGroup() async throws {
+        let dir = try makeTempDirectory()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let pidFile = dir.appendingPathComponent("escapee.pid")
+        let runner = sh()
+        let script = "/usr/bin/perl -MPOSIX -e 'POSIX::setsid(); exec \"sleep\", \"30\"' & echo $! > '\(pidFile.path)'; wait"
+        let task = Task { try await runner.run(["-c", script], environment: [:]) }
+
+        var escapee: pid_t = 0
+        for _ in 0..<200 {
+            if let text = try? String(contentsOf: pidFile, encoding: .utf8),
+               let value = Int32(text.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                escapee = value
+                break
+            }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        defer { if escapee > 0 { kill(escapee, SIGKILL) } }
+        XCTAssertGreaterThan(escapee, 0, "escapee pid was never written")
+
+        let started = Date()
+        task.cancel()
+        do {
+            _ = try await task.value
+            XCTFail("expected cancellation")
+        } catch BurrowError.cancelled {
+        } catch {
+            XCTFail("\(error)")
+        }
+        XCTAssertLessThan(Date().timeIntervalSince(started), 5, "cancelled run waited for a helper outside the group")
+    }
+
     func testCancelledBeforeStartDoesNotRun() async throws {
         let dir = try makeTempDirectory()
         defer { try? FileManager.default.removeItem(at: dir) }
