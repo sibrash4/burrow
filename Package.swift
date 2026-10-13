@@ -10,6 +10,7 @@ let package = Package(
     targets: [
         .target(name: "BurrowCore"),
         .executableTarget(name: "Burrow", dependencies: ["BurrowCore"]),
+        .testTarget(name: "BurrowTests", dependencies: ["Burrow", "BurrowCore"]),
         .testTarget(
             name: "BurrowCoreTests",
             dependencies: ["BurrowCore"],
