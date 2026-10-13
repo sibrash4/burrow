@@ -25,7 +25,7 @@ enum AppWiring {
             .purge: PurgeJob(runner: runner, launcher: launcher),
             .installers: InstallerJob(launcher: launcher),
             .uninstall: uninstall,
-            .aiLeftovers: aiLeftoversPlaceholder(),
+            .aiLeftovers: AILeftoversJob(),
         ]
 
         let model = AppModel(
@@ -67,31 +67,6 @@ enum AppWiring {
         } catch {
             return .missing
         }
-    }
-
-    // MARK: AI leftovers placeholder
-
-    /// TODO(agent/ai): the AI leftovers engine lives on branch agent/ai and is not merged yet.
-    /// Until it lands the sidebar entry is backed by a MockJob. Replace this function's body with the real
-    /// job (and delete `SampleDataJob`) when agent/ai is merged. This is the only place that needs to change.
-    static func aiLeftoversPlaceholder() -> MoleJob {
-        SampleDataJob(base: MockJob(kind: .aiLeftovers))
-    }
-}
-
-/// Wraps a MockJob so the sample rows are clearly labelled. The mock run only simulates; it touches no files.
-struct SampleDataJob: MoleJob {
-    var base: MockJob
-    var kind: JobKind { base.kind }
-
-    func scan() async throws -> ScanResult {
-        var result = try await base.scan()
-        result.notes.insert("Sample data. The AI leftovers engine isn't connected yet, so nothing here is real and nothing will be removed.", at: 0)
-        return result
-    }
-
-    func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
-        base.run(selection: selection, from: scan)
     }
 }
 

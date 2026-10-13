@@ -45,14 +45,6 @@ final class AppWiringTests: XCTestCase {
         XCTAssertNil(unparsable.bytes)
     }
 
-    func testAIPlaceholderIsLabelledAsSampleData() async throws {
-        let job = AppWiring.aiLeftoversPlaceholder()
-        XCTAssertEqual(job.kind, .aiLeftovers)
-        let scan = try await job.scan()
-        XCTAssertTrue(scan.notes.first?.hasPrefix("Sample data") == true)
-        XCTAssertFalse(scan.allItems.isEmpty)
-    }
-
     func testAlwaysKeepOnlyReachesTheHandlerForClean() async throws {
         let recorder = Recorder()
         var jobs: [JobKind: MoleJob] = [:]
