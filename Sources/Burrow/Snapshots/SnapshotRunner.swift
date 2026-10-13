@@ -126,9 +126,8 @@ enum SnapshotRunner {
                 var s = reviewState(MockData.clean)
                 s.phase = .running
                 s.status = "Cleaning Browsers"
-                // Mole gives no byte-level progress, so the real bar is indeterminate. A frozen mid-run value
-                // keeps the snapshot showing a visible fill.
-                s.progress = 0.4
+                // Mole gives no byte-level progress, so progress stays nil and the bar is indeterminate, as in
+                // a real run. No count is shown either. The snapshot matches the live app.
                 s.log = [
                     "Cleaning User essentials",
                     "  Removed User app cache  1.2 GB",

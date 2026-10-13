@@ -28,6 +28,8 @@ struct StrataBar: View {
                         Rectangle()
                             .fill(fill(layer.index))
                             .frame(height: max(2, geo.size.height * CGFloat(layer.bytes) / CGFloat(max(total, 1))))
+                            .contentShape(Rectangle())
+                            .help("\(layer.title): \(ByteSize.format(layer.bytes)) selected")
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 4, style: .continuous))

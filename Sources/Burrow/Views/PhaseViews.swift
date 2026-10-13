@@ -7,13 +7,21 @@ struct RunningView: View {
     var logRevision: Int
     /// nil: Mole gives no byte-level progress, so the bar is indeterminate.
     var progress: Double?
+    /// "3 of 10 items". Shown only when progress is known, so it never claims a count Mole did not report.
+    var countText: String?
     var stopping: Bool
     var onStop: () -> Void
     @State private var showLog = true
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(status.isEmpty ? "Working" : status).font(.title3)
+            HStack(alignment: .firstTextBaseline) {
+                Text(status.isEmpty ? "Working" : status).font(.title3)
+                Spacer()
+                if let countText {
+                    Text(countText).font(RowType.secondary).foregroundStyle(Ink.secondary).monospacedDigit()
+                }
+            }
             if let progress {
                 ProgressView(value: progress)
             } else {
@@ -68,36 +76,55 @@ struct DoneView: View {
     @State private var showLog = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        // The whole block is centred in the pane: a 520pt column, centred both ways.
+        VStack(alignment: .center, spacing: 16) {
             Image(systemName: "checkmark.circle")
                 .font(.system(size: 30, weight: .regular))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Ink.secondary)
                 .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 4) {
+            VStack(alignment: .center, spacing: 4) {
                 Text(title).font(.title2.weight(.semibold))
-                Text(detail).foregroundStyle(.secondary)
+                Text(detail).foregroundStyle(Ink.secondary)
             }
             if let problems = result?.problems, !problems.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .center, spacing: 6) {
                     Text(problems.count == 1 ? "1 thing was skipped" : "\(problems.count) things were skipped")
                         .font(RowType.primary.weight(.semibold))
                     ForEach(problems, id: \.self) { problem in
-                        Text(problem).font(RowType.secondary).foregroundStyle(.secondary)
+                        Text(problem).font(RowType.secondary).foregroundStyle(Ink.secondary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                 }
             }
             if let log = result?.log, !log.isEmpty {
-                DisclosureGroup("Details", isExpanded: $showLog) {
-                    LogView(lines: log.components(separatedBy: "\n")).frame(height: 200)
+                // A centred toggle, not a DisclosureGroup: its chevron is pinned to the group's leading edge,
+                // which left it far from the centred label. The expanded log stays full width in the column.
+                VStack(spacing: 10) {
+                    Button {
+                        showLog.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Details")
+                            Image(systemName: showLog ? "chevron.down" : "chevron.right")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(showLog ? "Expanded" : "Collapsed")
+                    if showLog {
+                        LogView(lines: log.components(separatedBy: "\n")).frame(height: 200)
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
             Button("Scan again", action: onAgain)
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
         }
-        .frame(maxWidth: 520, alignment: .leading)
+        .multilineTextAlignment(.center)
+        .frame(maxWidth: 520)
         .padding(32)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
     private var title: String {

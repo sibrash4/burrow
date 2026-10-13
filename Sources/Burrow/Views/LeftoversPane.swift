@@ -29,14 +29,18 @@ struct LeftoversPane: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(item.title).font(RowType.primary.weight(.semibold)).lineLimit(2)
             if let path = item.paths.first {
-                Text(path).font(RowType.secondary).foregroundStyle(.secondary)
+                Text(path).font(RowType.secondary).foregroundStyle(Ink.secondary)
                     .lineLimit(1).truncationMode(.middle)
+                    .help(path)
             }
             if let bytes = item.bytes {
-                Text("App \(ByteSize.format(bytes))").font(RowType.secondary).foregroundStyle(.secondary).monospacedDigit()
+                Text("App \(ByteSize.format(bytes))").font(RowType.secondary).foregroundStyle(Ink.secondary).monospacedDigit()
             }
         }
-        .padding(16)
+        // Top inset is tuned so the title's baseline sits on the list's group header baseline (the list header).
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -58,20 +62,22 @@ struct LeftoversPane: View {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 VStack(alignment: .leading, spacing: 1) {
                                     Text((entry.path as NSString).lastPathComponent)
-                                        .font(RowType.primary).lineLimit(1)
+                                        .font(RowType.primary).lineLimit(1).truncationMode(.tail)
                                     Text(((entry.path as NSString).deletingLastPathComponent as NSString).abbreviatingWithTildeInPath)
-                                        .font(RowType.secondary).foregroundStyle(.secondary)
-                                        .lineLimit(1).truncationMode(.middle)
+                                        .font(RowType.secondary).foregroundStyle(Ink.secondary)
+                                        .lineLimit(1).truncationMode(.tail)
                                 }
                                 Spacer(minLength: 8)
                                 Text(entry.bytes.map(ByteSize.format) ?? "\u{2014}")
                                     .font(RowType.primary).monospacedDigit()
                             }
+                            // The full path is only ever a hover away, because the rows truncate.
+                            .help(entry.path)
                             .accessibilityElement(children: .combine)
                         }
                     } header: {
                         Text("Also removed with this app")
-                            .font(RowType.secondary).foregroundStyle(.secondary).textCase(nil)
+                            .font(RowType.secondary).foregroundStyle(Ink.secondary).textCase(nil)
                     }
                 }
                 .listStyle(.inset)

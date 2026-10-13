@@ -3,28 +3,31 @@ import BurrowCore
 
 struct ItemRow: View {
     var item: ScanItem
-    var groupIndex: Int
+    /// Opt-in lists: an unticked row is "not chosen", so it dims without a strike or a "Kept" label.
+    var optIn: Bool
     var isOn: Bool
     var isExpanded: Bool
     var onToggle: () -> Void
     var onExpand: () -> Void
 
-    private var kept: Bool { item.selectable && !isOn }
+    /// Unticked and selectable: dimmed in every list.
+    private var dimmed: Bool { item.selectable && !isOn }
+    /// Clean-style lists only: an unticked row is "kept", shown with a strike and a label.
+    private var kept: Bool { dimmed && !optIn }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .center, spacing: 10) {
                 checkbox
-                StrataSwatch(index: groupIndex, filled: item.selectable && isOn)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.title)
                         .font(RowType.primary)
-                        .foregroundStyle(item.selectable && isOn ? .primary : .secondary)
+                        .foregroundStyle(dimmed ? Ink.secondary : .primary)
                         .lineLimit(1)
                     if let detail = item.detail {
                         Text(detail)
                             .font(RowType.secondary)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Ink.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
                     }
@@ -47,7 +50,7 @@ struct ItemRow: View {
                 .toggleStyle(.checkbox)
                 .labelsHidden()
                 .accessibilityLabel(item.title)
-                .accessibilityValue(isOn ? "Selected" : "Kept")
+                .accessibilityValue(isOn ? "Selected" : (optIn ? "Not selected" : "Kept"))
         } else {
             Color.clear.frame(width: 16, height: 16).accessibilityHidden(true)
         }
@@ -64,7 +67,7 @@ struct ItemRow: View {
             }
         }
         .font(RowType.secondary)
-        .foregroundStyle(.secondary)
+        .foregroundStyle(Ink.secondary)
         .lineLimit(1)
         .frame(width: 84, alignment: .trailing)
     }
@@ -75,11 +78,11 @@ struct ItemRow: View {
                 .font(RowType.primary)
                 .monospacedDigit()
                 .strikethrough(kept)
-                .foregroundStyle(item.selectable && isOn ? .primary : .secondary)
+                .foregroundStyle(dimmed ? Ink.secondary : .primary)
             if kept {
                 Text("Kept")
                     .font(RowType.secondary)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
         }
         .frame(width: 76, alignment: .trailing)
@@ -89,7 +92,8 @@ struct ItemRow: View {
 
     private var sizeSpoken: String {
         let size = item.bytes.map(ByteSize.format) ?? "size not reported"
-        return kept ? "\(size), kept" : size
+        if kept { return "\(size), kept" }
+        return dimmed ? "\(size), not selected" : size
     }
 
     @ViewBuilder private var disclosure: some View {
@@ -103,7 +107,7 @@ struct ItemRow: View {
                     .frame(width: 16, height: 16)
             }
             .buttonStyle(.borderless)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(Ink.secondary)
             .help(isExpanded ? "Hide paths" : "Show paths")
             .accessibilityLabel(isExpanded ? "Hide paths" : "Show paths")
         }
@@ -114,7 +118,7 @@ struct ItemRow: View {
             ForEach(item.paths.prefix(8), id: \.self) { path in
                 Text(path)
                     .font(RowType.secondary.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .lineLimit(1)
                     .truncationMode(.middle)
                     .textSelection(.enabled)
@@ -122,7 +126,7 @@ struct ItemRow: View {
             if item.paths.count > 8 {
                 Text("and \(item.paths.count - 8) more")
                     .font(RowType.secondary)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
             }
         }
         .padding(.leading, 42)

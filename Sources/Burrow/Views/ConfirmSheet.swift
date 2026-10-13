@@ -27,7 +27,7 @@ struct ConfirmSheet: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(headline).font(.title3.weight(.semibold))
                 Text(kind.consequence(trashIncluded: trashIncluded) + " Anything you unticked stays where it is.")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Ink.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
 
@@ -38,7 +38,7 @@ struct ConfirmSheet: View {
                         Text(line.title).font(RowType.primary).lineLimit(1)
                         Spacer()
                         Text(plural(line.count, kind.noun.one, kind.noun.many))
-                            .font(RowType.secondary).foregroundStyle(.secondary)
+                            .font(RowType.secondary).foregroundStyle(Ink.secondary)
                         Text(line.bytes > 0 ? ByteSize.format(line.bytes) : "\u{2014}")
                             .font(RowType.primary).monospacedDigit()
                             .frame(width: 76, alignment: .trailing)
@@ -48,7 +48,7 @@ struct ConfirmSheet: View {
                 }
                 if lines.count > shown {
                     Text("and \(lines.count - shown) more")
-                        .font(RowType.secondary).foregroundStyle(.secondary)
+                        .font(RowType.secondary).foregroundStyle(Ink.secondary)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 5)
                 }
