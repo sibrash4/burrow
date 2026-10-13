@@ -6,3 +6,5 @@ _research/
 .swiftpm/
 .impeccable/build/
 .impeccable/config.local.json
+PLAN.md
+STATUS.md
