@@ -82,7 +82,10 @@ public enum ClaudeScanner {
     /// Claude Code names a project folder after its path with every symbol turned into "-". That name cannot be
     /// decoded reliably (folder names contain "-"), so the cwd is encoded the same way and compared instead.
     static func encodedKey(_ path: String) -> String {
-        String(path.map { $0.isLetter || $0.isNumber ? $0 : "-" })
+        // ASCII letters and digits only, as Claude does: a non-ASCII letter in a folder name also becomes "-".
+        String(path.unicodeScalars.map { scalar in
+            (scalar.isASCII && (CharacterSet.alphanumerics.contains(scalar))) ? Character(scalar) : "-"
+        })
     }
 
     /// One row covering the old entries directly inside `dir`. nil when there are none.
