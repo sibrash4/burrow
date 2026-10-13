@@ -103,9 +103,17 @@ public enum CleanScanBuilder {
             count: acc.count,
             paths: acc.paths,
             selectable: !owner.alwaysCleaned,
-            selectedByDefault: true,
-            note: owner.alwaysCleaned ? "Always cleaned by Mole" : nil
+            // Mole empties the whole Trash at run time, including items added after the scan, and not for the
+            // Trash row alone. So it is only ever removed when the user ticks it.
+            selectedByDefault: !owner.isTrash,
+            note: note(for: owner, pathCount: acc.paths.count)
         )
+    }
+
+    private static func note(for owner: CleanOwner, pathCount: Int) -> String? {
+        if owner.alwaysCleaned { return "Always cleaned by Mole" }
+        if owner.isTrash { return "Empties the Trash permanently (\(pathCount) \(pathCount == 1 ? "item" : "items"))" }
+        return nil
     }
 
     private static func emptyItem(group: String, empties: [Accumulator]) -> ScanItem {

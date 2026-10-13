@@ -15,6 +15,10 @@ final class FakeMole: CommandRunning, @unchecked Sendable {
     var honorsWhitelist = true
     var writesList = true
     var exitCode: Int32 = 0
+    /// Lines Mole lists on top of the fixture, e.g. something new that appeared after the scan.
+    var extraEntries: [String] = []
+    /// Called at the end of each call, with the 1-based call number.
+    var onRun: (@Sendable (Int) -> Void)?
 
     init(whitelistURL: URL, listURL: URL) {
         self.whitelistURL = whitelistURL
@@ -28,10 +32,11 @@ final class FakeMole: CommandRunning, @unchecked Sendable {
 
     func run(_ args: [String], environment: [String: String]) async throws -> (exitCode: Int32, output: String) {
         let whitelistData = try? Data(contentsOf: whitelistURL)
-        lock.withLock {
+        let callNumber = lock.withLock {
             _calls.append(args)
             _environments.append(environment)
             _whitelistSeen.append(whitelistData)
+            return _calls.count
         }
         guard exitCode == 0 else { return (exitCode, "Mole failed") }
 
@@ -42,13 +47,14 @@ final class FakeMole: CommandRunning, @unchecked Sendable {
                 guard line.hasPrefix("/"), let range = line.range(of: "  # ", options: .backwards) else { return true }
                 return !Self.isProtected(String(line[..<range.lowerBound]), by: protected)
             }
-            try kept.joined(separator: "\n").write(to: listURL, atomically: true, encoding: .utf8)
+            try (kept + extraEntries).joined(separator: "\n").write(to: listURL, atomically: true, encoding: .utf8)
         }
 
         var output = try CleanFixtures.text("clean_dryrun")
         if protected.contains("/Users/test/.npm/_cacache/*") {
             output = output.replacingOccurrences(of: "→ npm cache · would clean", with: "→ npm cache · would skip (whitelist)")
         }
+        onRun?(callNumber)
         return (0, output)
     }
 
