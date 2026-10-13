@@ -18,8 +18,10 @@ final class InstallerTests: XCTestCase {
         XCTAssertEqual(first.title, "1Password.zip")
         XCTAssertEqual(first.detail, "Downloads")
         XCTAssertEqual(first.bytes, 21_800_000)
-        XCTAssertTrue(first.selectedByDefault && first.selectable)
-        XCTAssertEqual(result.defaultSelection.count, 18)
+        XCTAssertTrue(first.selectable)
+        // Mole's installer menu starts with nothing ticked. Burrow must not pre-select installers.
+        XCTAssertFalse(first.selectedByDefault)
+        XCTAssertTrue(result.defaultSelection.isEmpty)
     }
 
     func testGroupsByLocationInMenuOrderAndFlagsDuplicates() {
@@ -32,7 +34,8 @@ final class InstallerTests: XCTestCase {
         XCTAssertEqual(result.groups.map(\.title), ["Downloads", "Desktop"])
         XCTAssertEqual(result.groups[0].items.map(\.selectable), [false, false, true])
         XCTAssertNotNil(result.groups[0].items[0].note)
-        XCTAssertEqual(result.defaultSelection, ["b.pkg | Desktop", "c.zip | Downloads"])
+        XCTAssertTrue(result.defaultSelection.isEmpty)
+        XCTAssertEqual(result.groups.flatMap(\.items).filter { $0.selectable }.map(\.selectedByDefault), [false, false])
     }
 
     func testScanReadsEveryPageThenQuits() async throws {
