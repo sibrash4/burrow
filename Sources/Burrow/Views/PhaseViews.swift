@@ -97,9 +97,25 @@ struct DoneView: View {
                 }
             }
             if let log = result?.log, !log.isEmpty {
-                DisclosureGroup("Details", isExpanded: $showLog) {
-                    LogView(lines: log.components(separatedBy: "\n")).frame(height: 200)
+                // A centred toggle, not a DisclosureGroup: its chevron is pinned to the group's leading edge,
+                // which left it far from the centred label. The expanded log stays full width in the column.
+                VStack(spacing: 10) {
+                    Button {
+                        showLog.toggle()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Text("Details")
+                            Image(systemName: showLog ? "chevron.down" : "chevron.right")
+                                .font(.caption.weight(.semibold))
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityValue(showLog ? "Expanded" : "Collapsed")
+                    if showLog {
+                        LogView(lines: log.components(separatedBy: "\n")).frame(height: 200)
+                    }
                 }
+                .frame(maxWidth: .infinity)
             }
             Button("Scan again", action: onAgain)
                 .buttonStyle(.borderedProminent)
