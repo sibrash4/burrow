@@ -55,7 +55,7 @@ struct BurrowApp: App {
                 Picker("Appearance", selection: $appearance) {
                     ForEach(AppearanceMode.allCases, id: \.self) { Text($0.title).tag($0) }
                 }
-                .pickerStyle(.inline)
+                .pickerStyle(.menu)
             }
         }
 
