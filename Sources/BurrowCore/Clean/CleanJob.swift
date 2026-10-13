@@ -234,7 +234,7 @@ public struct CleanJob: MoleJob {
 
     /// Paths and tool commands Mole would clean that the reviewed scan does not show as ticked. Flagged: a path under
     /// an unticked row, a path whose owner (folder) the scan never showed, and a command row the scan never listed.
-    /// A new file under an owner the user ticked is not flagged here.
+    /// A new file under an owner the user ticked is not flagged here, except in the Trash (emptying it is permanent).
     static func unreviewed(in list: CleanList, dryRun: CleanDryRun, scan: ScanResult, unticked: [ScanItem], home: String) -> [String] {
         let untickedIDs = Set(unticked.map(\.id))
         var reviewedOwners = Set<String>()
@@ -259,6 +259,9 @@ public struct CleanJob: MoleJob {
             if untickedOwners.contains(counted) || untickedOwners.contains(own) {
                 found.append(entry.path)
             } else if !(reviewedOwners.contains(counted) || reviewedOwners.contains(own) || reviewedPaths.contains(entry.path)) {
+                found.append(entry.path)
+            } else if CleanOwnerResolver.resolve(path: entry.path, home: home).isTrash, !reviewedPaths.contains(entry.path) {
+                // Emptying the Trash is permanent: an item that arrived after the scan was never shown, even if the Trash row is ticked.
                 found.append(entry.path)
             }
         }

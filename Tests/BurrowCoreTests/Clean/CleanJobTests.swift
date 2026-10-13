@@ -271,6 +271,22 @@ final class CleanJobTests: TempDirTestCase {
         ], "a new file under a ticked folder is not flagged; the rest are")
     }
 
+    func testItemDroppedIntoTheTrashAfterTheScanStopsARunThatEmptiesTheTrash() async throws {
+        let (job, mole, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        let everything = Set(scan.allItems.filter(\.selectable).map(\.id))
+        XCTAssertTrue(everything.contains(CleanScanBuilder.trashID))
+        mole.extraEntries = ["/Users/test/.Trash/dropped-after-scan.txt  # 1.0MB"]
+
+        do {
+            _ = try await collectEvents(job.run(selection: everything, from: scan))
+            XCTFail("expected selectionMismatch")
+        } catch BurrowError.selectionMismatch(_, let actual) {
+            XCTAssertTrue(actual.contains("dropped-after-scan.txt"))
+        }
+        XCTAssertTrue(launcher.launches.isEmpty, "the Trash was not emptied")
+    }
+
     func testEveryRealRunIsPreviewedFirstEvenWhenEverythingIsTicked() async throws {
         let (job, mole, _) = try setUpJob()
         let scan = try await job.scan()

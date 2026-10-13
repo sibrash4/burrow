@@ -119,6 +119,8 @@ enum WhitelistLock {
 public final class WhitelistTransaction: @unchecked Sendable {
     public static let temporaryMarker = "# Burrow: temporary (removed after the run)"
     private static let backupMagic = "BURROW-WHITELIST-BACKUP 2\n"
+    /// Backups left by earlier builds hold the real original too. They carry no hash, so they restore unchecked.
+    private static let legacyBackupMagic = "BURROW-WHITELIST-BACKUP 1\n"
 
     public static var defaultFileURL: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".config/mole/whitelist")
@@ -200,9 +202,9 @@ public final class WhitelistTransaction: @unchecked Sendable {
         let target = WhitelistFile.resolved(fileURL)
         let current: Data? = fm.fileExists(atPath: target.path) ? try Data(contentsOf: target) : nil
 
-        if checkingFile {
+        if checkingFile, let written = saved.written {
             // Absent before the run and still absent, or present and byte-for-byte what Burrow wrote.
-            let unchanged = current.map { Self.digest($0) == saved.written } ?? !saved.existed
+            let unchanged = current.map { Self.digest($0) == written } ?? !saved.existed
             guard unchanged else {
                 // Keep the earlier file for the user, then stop treating the run as open so Burrow is not stuck.
                 if saved.existed { try saved.payload.write(to: unrestoredURL, options: .atomic) }
@@ -246,23 +248,25 @@ public final class WhitelistTransaction: @unchecked Sendable {
         try data.write(to: backupURL, options: .atomic)
     }
 
-    private func readBackup() throws -> (existed: Bool, written: String, payload: Data) {
+    private func readBackup() throws -> (existed: Bool, written: String?, payload: Data) {
         let data: Data
         do { data = try Data(contentsOf: backupURL) } catch { throw WhitelistError.backupUnreadable(error.localizedDescription) }
         let magic = Data(Self.backupMagic.utf8)
-        guard data.starts(with: magic) else { throw WhitelistError.backupUnreadable("unknown format") }
+        let legacy = Data(Self.legacyBackupMagic.utf8)
+        let isLegacy = !data.starts(with: magic) && data.starts(with: legacy)
+        guard data.starts(with: magic) || isLegacy else { throw WhitelistError.backupUnreadable("unknown format") }
 
-        var index = data.index(data.startIndex, offsetBy: magic.count)
+        var index = data.index(data.startIndex, offsetBy: isLegacy ? legacy.count : magic.count)
         func nextLine() throws -> String {
             guard let end = data[index...].firstIndex(of: 0x0A) else { throw WhitelistError.backupUnreadable("missing state") }
             defer { index = data.index(after: end) }
             return String(decoding: data[index..<end], as: UTF8.self)
         }
         let state = try nextLine()
+        guard state == "existed" || state == "absent" else { throw WhitelistError.backupUnreadable("missing state") }
+        if isLegacy { return (state == "existed", nil, Data(data[index...])) }
         let writtenLine = try nextLine()
-        guard state == "existed" || state == "absent", writtenLine.hasPrefix("written ") else {
-            throw WhitelistError.backupUnreadable("missing state")
-        }
+        guard writtenLine.hasPrefix("written ") else { throw WhitelistError.backupUnreadable("missing state") }
         return (state == "existed", String(writtenLine.dropFirst("written ".count)), Data(data[index...]))
     }
 }

@@ -247,6 +247,17 @@ final class WhitelistTransactionTests: TempDirTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: lockFile.path), "the lock is released")
     }
 
+    func testBackupFromAnEarlierBuildStillRestoresTheOriginal() throws {
+        let original = Data("/Users/test/a\n".utf8)
+        try Data("/Users/test/a\n\n# Burrow: temporary (removed after the run)\n/Users/test/x\n".utf8).write(to: whitelist)
+        try FileManager.default.createDirectory(at: backup.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try (Data("BURROW-WHITELIST-BACKUP 1\nexisted\n".utf8) + original).write(to: backup)
+
+        XCTAssertTrue(try WhitelistTransaction.recoverIfNeeded(fileURL: whitelist, backupURL: backup))
+        XCTAssertEqual(try bytes(), original)
+        XCTAssertFalse(backupExists)
+    }
+
     /// A live process whose executable is named Burrow, as another running copy of the app is.
     private func startProcessNamedBurrow() throws -> Process {
         let folder = dir.appendingPathComponent("other")
