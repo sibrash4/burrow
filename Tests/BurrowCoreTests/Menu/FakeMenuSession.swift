@@ -39,9 +39,16 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     private var transcriptText = ""
     private var exited = false
     private var enterCount = 0
+    /// Exit code reported once the fake has exited.
+    var exitCodeAfterExit: Int32 = 0
 
     /// Rows whose Space press does nothing (a row Mole refuses to toggle).
     var stuckRows: Set<Int> = []
+    /// Mole draws the rows first and the "Path:" line a moment later. While this is positive, the fake shows the
+    /// previous cursor row's path for that long after every key, like the real purge menu does.
+    var pathLag: TimeInterval = 0
+    private var previousCursor = 0
+    private var lastMove = Date.distantPast
     /// Added to the "N selected" counter to simulate a header that disagrees with the rows.
     var headerCountOffset = 0
     /// Text Mole prints after the first Enter (the confirm screen) and after the second (the run).
@@ -61,12 +68,16 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
 
     func send(_ keys: String) throws {
         lock.lock(); defer { lock.unlock() }
+        // Same as PTYSession: writing to a finished process throws.
+        if exited { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: "Mole is no longer running.") }
         sent.append(keys)
         switch keys {
         case TerminalKey.down:
+            previousCursor = cursor; lastMove = Date()
             if cursor < items.count - 1 { cursor += 1 }
             if cursor >= top + perPage { top = cursor - perPage + 1 }
         case TerminalKey.up:
+            previousCursor = cursor; lastMove = Date()
             if cursor > 0 { cursor -= 1 }
             if cursor < top { top = cursor }
         case TerminalKey.space:
@@ -89,8 +100,10 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     func waitForFrame(timeout: TimeInterval, _ predicate: @escaping @Sendable (String) -> Bool) async throws -> String {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
-            let frame = currentFrame()
+            let (frame, ended) = lock.withLock { (render(), exited) }
             if predicate(frame) { return frame }
+            // Same as PTYSession: if Mole is gone and the screen never matched, fail now instead of waiting.
+            if ended { throw BurrowError.processFailed(exitCode: exitCodeAfterExit, output: lock.withLock { transcriptText }) }
             guard Date() < deadline else { throw BurrowError.timeout("frame") }
             try await Task.sleep(nanoseconds: 2_000_000)
         }
@@ -99,7 +112,7 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
     func waitForExit(timeout: TimeInterval) async throws -> Int32 {
         let deadline = Date().addingTimeInterval(timeout)
         while Date() < deadline {
-            if lock.withLock({ exited }) { return 0 }
+            if lock.withLock({ exited }) { return exitCodeAfterExit }
             try await Task.sleep(nanoseconds: 2_000_000)
         }
         throw BurrowError.timeout("exit")
@@ -125,7 +138,10 @@ final class FakeMenuSession: InteractiveSession, @unchecked Sendable {
             }
         }
         out.append("")
-        if kind == .purge { out.append("Path: \(items[cursor].path)") }
+        if kind == .purge {
+            let lagging = pathLag > 0 && Date().timeIntervalSince(lastMove) < pathLag
+            out.append("Path: \(items[lagging ? previousCursor : cursor].path)")
+        }
         out.append(kind == .installer ? "↑↓  |  Space Select  |  Enter Confirm  |  A All  |  I Invert  |  Q Quit"
                                       : "↑↓ [] Projects / Find | Space Select | Enter Confirm | A All | I Invert | X Skip Project | Q Quit")
         return out.joined(separator: "\n")

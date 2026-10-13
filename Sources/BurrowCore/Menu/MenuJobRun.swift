@@ -17,14 +17,23 @@ enum MenuSession {
     static let escape = "\u{1B}"
     static let confirmMarker = "Enter confirm, ESC cancel"
 
+    /// Polls the transcript until `predicate` holds. Throws `.timeout` on the deadline, and
+    /// `.processFailed` if Mole exits first (the final output is still checked before giving up,
+    /// so a message printed just before a clean exit is seen).
     static func transcriptWait(_ session: InteractiveSession, timeout: TimeInterval,
                                _ predicate: (String) -> Bool) async throws -> String {
         let deadline = Date().addingTimeInterval(timeout)
         while true {
             let text = session.transcript()
             if predicate(text) { return text }
-            guard Date() < deadline else { throw BurrowError.timeout("waiting for Mole") }
-            try await Task.sleep(nanoseconds: 50_000_000)
+            do {
+                let code = try await session.waitForExit(timeout: 0.05)
+                let final = session.transcript()
+                if predicate(final) { return final }
+                throw BurrowError.processFailed(exitCode: code, output: final)
+            } catch BurrowError.timeout {
+                guard Date() < deadline else { throw BurrowError.timeout("waiting for Mole") }
+            }
         }
     }
 
@@ -68,7 +77,17 @@ enum MenuJobRun {
 
                     continuation.yield(.status("Selecting \(wanted.count) \(wanted.count == 1 ? "item" : "items")"))
                     let mark = session.transcript().utf8.count
-                    try await driver.select(exactly: wanted, in: session)
+                    do {
+                        try await driver.select(exactly: wanted, in: session)
+                    } catch BurrowError.processFailed(let code, let output) where code == 0 {
+                        // Mole finished cleanly without ever offering the list, e.g. everything was already gone.
+                        // Nothing was confirmed, so nothing was removed. This is "finished", not an error.
+                        let note = "Mole finished without showing anything to remove. Nothing was removed."
+                        continuation.yield(.line(note))
+                        continuation.yield(.finished(RunResult(itemCount: 0, problems: [note], exitCode: 0, log: output)))
+                        continuation.finish()
+                        return
+                    }
 
                     let afterMenu = try await MenuSession.transcriptWait(session, timeout: 60) {
                         MenuSession.text(of: $0, after: mark).contains(MenuSession.confirmMarker)

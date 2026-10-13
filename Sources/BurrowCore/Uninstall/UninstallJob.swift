@@ -21,6 +21,8 @@ public struct UninstallJob: MoleJob {
     private let launcher: InteractiveLaunching
     private let timeouts: UninstallTimeouts
     private let environment = ["NO_COLOR": "1"]
+    /// Extra flags for `run`, placed before the app names. Tests set `--dry-run` for live checks; the app never does.
+    var extraRunArguments: [String] = []
 
     public init(runner: CommandRunning, launcher: InteractiveLaunching, timeouts: UninstallTimeouts = UninstallTimeouts()) {
         self.runner = runner; self.launcher = launcher; self.timeouts = timeouts
@@ -108,20 +110,25 @@ public struct UninstallJob: MoleJob {
     /// then cancels the second prompt with "q".
     public func previewLeftovers(for item: ScanItem) async throws -> [String] {
         let name = try Self.argument(for: item)
-        let session = try launcher.launch(["uninstall", "--dry-run", name], environment: environment, columns: 120, rows: 40)
+        let args = Self.previewArguments(for: name)
+        // This flow answers "y" to Mole's first prompt so that it lists the leftovers. That is only acceptable
+        // because --dry-run is on the command line; without it "y" would start a real uninstall.
+        precondition(args.contains("--dry-run"), "previewLeftovers must always run mo uninstall with --dry-run")
+        let session = try launcher.launch(args, environment: environment, columns: 120, rows: 40)
         return try await withTaskCancellationHandler {
             defer { session.terminate() }
             let frame = try await Self.wait(session, timeouts.firstPrompt, [UninstallOutput.proceedPrompt, UninstallOutput.noMatchMarker])
             if frame.contains(UninstallOutput.noMatchMarker) { throw UninstallError.appNotFound(name) }
-            try Self.requireMatched([name], in: frame, session: session, decline: "n\r")
+            try Self.requireMatched([name], in: session.transcript(), session: session, decline: "n\r")
 
-            try session.send("y\r")
-            let plan = try await Self.wait(session, timeouts.preview, [UninstallOutput.confirmPrompt] + UninstallOutput.abortMarkers)
+            try Self.answer("y\r", on: session)
+            let shown = try await Self.wait(session, timeouts.preview, [UninstallOutput.confirmPrompt] + UninstallOutput.abortMarkers)
             try? session.send(TerminalKey.quit)
-            guard plan.contains(UninstallOutput.confirmPrompt) else {
-                throw UninstallError.previewUnavailable(UninstallOutput.lines(plan).last ?? "no output")
+            guard shown.contains(UninstallOutput.confirmPrompt) else {
+                throw UninstallError.previewUnavailable(UninstallOutput.lines(shown).last ?? "no output")
             }
-            let parsed = UninstallOutput.removalPlan(in: plan)
+            // Parsed from the transcript, not the screen: a long file list scrolls off the top of the screen.
+            let parsed = UninstallOutput.removalPlan(in: session.transcript())
             return Array((parsed.files[name] ?? []).dropFirst())
         } onCancel: {
             session.terminate()
@@ -159,7 +166,7 @@ public struct UninstallJob: MoleJob {
         guard !items.isEmpty else { throw UninstallError.nothingSelected }
         let names = try items.map { try Self.argument(for: $0) }
 
-        let session = try launcher.launch(["uninstall"] + names, environment: environment, columns: 120, rows: 40)
+        let session = try launcher.launch(["uninstall"] + extraRunArguments + names, environment: environment, columns: 120, rows: 40)
         holder.set(session)
         let forwarder = Task { await Self.forward(session.lines, to: continuation) }
         defer { forwarder.cancel() }
@@ -167,15 +174,16 @@ public struct UninstallJob: MoleJob {
         continuation.yield(.status("Checking \(names.count == 1 ? names[0] : "\(names.count) apps")"))
         let first = try await Self.wait(session, timeouts.firstPrompt, [UninstallOutput.proceedPrompt, UninstallOutput.noMatchMarker])
         if first.contains(UninstallOutput.noMatchMarker) { throw UninstallError.appNotFound(names.joined(separator: ", ")) }
-        try Self.requireMatched(names, in: first, session: session, decline: "n\r")
+        try Self.requireMatched(names, in: session.transcript(), session: session, decline: "n\r")
 
-        try session.send("y\r")
+        try Self.answer("y\r", on: session)
         continuation.yield(.status("Measuring leftover files"))
-        let plan = try await Self.wait(session, timeouts.preview, [UninstallOutput.confirmPrompt] + UninstallOutput.abortMarkers)
-        guard plan.contains(UninstallOutput.confirmPrompt) else {
-            throw UninstallError.previewUnavailable(UninstallOutput.lines(plan).last ?? "no output")
+        let shown = try await Self.wait(session, timeouts.preview, [UninstallOutput.confirmPrompt] + UninstallOutput.abortMarkers)
+        guard shown.contains(UninstallOutput.confirmPrompt) else {
+            throw UninstallError.previewUnavailable(UninstallOutput.lines(shown).last ?? "no output")
         }
-        let parsed = UninstallOutput.removalPlan(in: plan)
+        // Parsed from the transcript, not the screen: a long file list scrolls off the top of the screen.
+        let parsed = UninstallOutput.removalPlan(in: session.transcript())
         guard parsed.count == names.count, Self.sameNames(parsed.names, names) else {
             try? session.send(TerminalKey.quit)
             throw BurrowError.selectionMismatch(
@@ -231,6 +239,14 @@ public struct UninstallJob: MoleJob {
     }
 
     // MARK: Helpers
+
+    /// The arguments for the leftover preview. Always contains --dry-run.
+    static func previewArguments(for name: String) -> [String] { ["uninstall", "--dry-run", name] }
+
+    /// Sends an answer. If Mole already exited, the following wait reports why, so a failed write is not the error.
+    private static func answer(_ keys: String, on session: InteractiveSession) throws {
+        do { try session.send(keys) } catch BurrowError.processFailed { }
+    }
 
     static func asksForPassword(_ transcript: String, after offset: Int) -> Bool {
         guard transcript.count > offset else { return false }

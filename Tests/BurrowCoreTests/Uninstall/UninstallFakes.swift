@@ -45,6 +45,8 @@ final class UninstallFakeSession: InteractiveSession, @unchecked Sendable {
     func show(_ newFrame: String, replace: Bool = true) {
         lock.lock()
         if replace { frame = newFrame } else { frame += newFrame }
+        // A real terminal moves to a new line when the answer is entered, so new output starts on a fresh line.
+        if !text.isEmpty, !text.hasSuffix("\n") { text += "\n" }
         text += newFrame
         lock.unlock()
         for line in newFrame.components(separatedBy: "\n") { lineContinuation.yield(line) }
@@ -56,7 +58,10 @@ final class UninstallFakeSession: InteractiveSession, @unchecked Sendable {
     }
 
     func send(_ keys: String) throws {
-        lock.lock(); sentKeys.append(keys); lock.unlock()
+        lock.lock()
+        // Same as PTYSession: writing to a finished process throws.
+        if let code = exitCode { lock.unlock(); throw BurrowError.processFailed(exitCode: code, output: "Mole is no longer running.") }
+        sentKeys.append(keys); lock.unlock()
         react(self, keys)
     }
 
@@ -68,6 +73,9 @@ final class UninstallFakeSession: InteractiveSession, @unchecked Sendable {
         while Date() < deadline {
             let now = currentFrame()
             if predicate(now) { return now }
+            // Same as PTYSession: if Mole is gone and the screen never matched, fail now instead of waiting.
+            lock.lock(); let code = exitCode; lock.unlock()
+            if let code { throw BurrowError.processFailed(exitCode: code, output: transcript()) }
             try await Task.sleep(nanoseconds: 5_000_000)
         }
         throw BurrowError.timeout("frame")

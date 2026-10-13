@@ -2,7 +2,7 @@ import XCTest
 @testable import BurrowCore
 
 final class MoleMenuDriverTests: XCTestCase {
-    private let driver = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3)
+    private let driver = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 0.3, settleTime: 0)
 
     private func installers(_ count: Int = 12, selected: Set<Int> = []) -> [FakeMenuItem] {
         (0..<count).map { FakeMenuItem(name: "app\($0).dmg", location: "Downloads", selected: selected.contains($0)) }
@@ -128,6 +128,45 @@ final class MoleMenuDriverTests: XCTestCase {
     }
 
     // MARK: -
+
+    // MARK: Path line lags the cursor (seen live with the real purge menu)
+
+    func testPurgeIdentifiesRowsCorrectlyWhenMolesPathLineLagsTheCursor() async throws {
+        // Mole draws the rows first and the Path line a few milliseconds later.
+        let patient = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 1, settleTime: 0.12)
+        let session = FakeMenuSession(kind: .purge, items: purgeItems(6), perPage: 4)
+        session.pathLag = 0.06
+        let report = try await patient.select(exactly: ["~/p2/node_modules", "~/p4/node_modules"], in: session)
+        XCTAssertEqual(Set(report.selectedKeys), ["~/p2/node_modules", "~/p4/node_modules"])
+        XCTAssertEqual(session.selectedNames.count, 2)
+        XCTAssertEqual(report.selectedSize, "2MB", "the driver reports Mole's own header total")
+    }
+
+    func testWithoutSettlingALaggingPathLineIsCaughtByTheVerificationPass() async {
+        // Settling off: the stale Path makes rows look like their neighbours. Nothing wrong may be confirmed.
+        let impatient = MoleMenuDriver(firstFrameTimeout: 2, frameTimeout: 1, settleTime: 0)
+        let session = FakeMenuSession(kind: .purge, items: purgeItems(6), perPage: 4)
+        session.pathLag = 0.06
+        await assertMismatch(session) { try await impatient.select(exactly: ["~/p2/node_modules"], in: session) }
+        XCTAssertEqual(session.enterPresses, 0, "a stale identity must never reach Enter")
+    }
+
+    // MARK: Mole exits instead of showing a menu
+
+    func testMoleExitingBeforeTheMenuFailsFastWithItsExitCode() async {
+        let session = FakeMenuSession(kind: .installer, items: installers(3), perPage: 5)
+        session.exitCodeAfterExit = 3
+        session.terminate()
+        do {
+            _ = try await driver.select(exactly: [key(0)], in: session)
+            XCTFail("expected processFailed")
+        } catch BurrowError.processFailed(let code, _) {
+            XCTAssertEqual(code, 3)
+        } catch {
+            XCTFail("\(error)")
+        }
+        XCTAssertEqual(session.enterPresses, 0)
+    }
 
     private func purgeItems(_ count: Int, selected: Set<Int> = []) -> [FakeMenuItem] {
         (0..<count).map {

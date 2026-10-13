@@ -72,6 +72,7 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
     private var revealed = 0
     private var _sent: [String] = []
     private var _terminated = false
+    private var exited = false
 
     init(chunks: [String], exitCode: Int32 = 0, neverExits: Bool = false) {
         self.chunks = chunks
@@ -82,7 +83,16 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
     var sent: [String] { lock.withLock { _sent } }
     var terminated: Bool { lock.withLock { _terminated } }
 
-    func send(_ keys: String) throws { lock.withLock { _sent.append(keys) } }
+    /// Like PTYSession: writing to a process that has already exited throws `processFailed`.
+    /// `exitsBeforeSend` makes the fake behave as if Mole exited just before the key was written.
+    var exitsBeforeSend = false
+
+    func send(_ keys: String) throws {
+        try lock.withLock {
+            if exitsBeforeSend || exited { exited = true; throw BurrowError.processFailed(exitCode: exitCode, output: "Mole is no longer running.") }
+            _sent.append(keys)
+        }
+    }
     func currentFrame() -> String { transcript() }
     func transcript() -> String { lock.withLock { chunks.prefix(revealed).joined() } }
     func waitForFrame(timeout: TimeInterval, _ predicate: @escaping @Sendable (String) -> Bool) async throws -> String {
@@ -99,7 +109,9 @@ final class FakeSession: InteractiveSession, @unchecked Sendable {
 
     func waitForExit(timeout: TimeInterval) async throws -> Int32 {
         let done: Bool = lock.withLock {
+            if exitsBeforeSend && revealed >= chunks.count { exited = true; return true }
             if revealed < chunks.count { revealed += 1; return false }
+            if !neverExits { exited = true }
             return !neverExits
         }
         if done { return exitCode }

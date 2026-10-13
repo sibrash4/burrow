@@ -17,6 +17,12 @@ enum ProcessEnvironment {
         if env["LANG"] == nil, env["LC_ALL"] == nil, env["LC_CTYPE"] == nil { env["LANG"] = "en_US.UTF-8" }
         if env["TERM"] == nil { env["TERM"] = "dumb" }
         for (key, value) in overrides { env[key] = value }
+        // MOLE_TEST_* are Mole's internal test hooks (MOLE_TEST_NO_AUTH, MOLE_TEST_MODE). They change colour
+        // detection, skip app-running probes and alter app-quit behaviour, so they must never reach a real run,
+        // whether inherited from whatever launched Burrow or passed in by a job.
+        for key in env.keys where key.hasPrefix(forbiddenPrefix) || key == "MOLE_SKIP_MAIN" { env[key] = nil }
         return env
     }
+
+    static let forbiddenPrefix = "MOLE_TEST_"
 }

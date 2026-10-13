@@ -29,9 +29,10 @@ public struct CleanJob: MoleJob {
     private let drainSeconds: TimeInterval
     private let maxRunSeconds: TimeInterval
 
-    /// Mole reads these on every run. `MOLE_TEST_NO_AUTH` makes every sudo request fail without
-    /// prompting (lib/core/sudo.sh), so the preview and the real run cover the same user-level items.
-    static let environment = ["NO_COLOR": "1", "MOLE_TEST_NO_AUTH": "1"]
+    /// Only NO_COLOR. Burrow never sets Mole's MOLE_TEST_* hooks: they are Mole's internal test switches and
+    /// change more than sudo (colour detection, app-running probes, app quit). Mole's own admin prompt is
+    /// answered instead: "System caches need sudo. Enter continue, Space skip:" gets Space (see `runClean`).
+    static let environment = ["NO_COLOR": "1"]
 
     public static var defaultCleanListURL: URL {
         URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".config/mole/clean-list.txt")
@@ -246,9 +247,9 @@ public struct CleanJob: MoleJob {
                     switch prompt {
                     case .systemCaches:
                         emit(.line("System caches need admin access, skipping them."))
-                        try session.send(TerminalKey.space)
+                        try answer(TerminalKey.space, on: session)
                     case .firstTimeSetup:
-                        try session.send(TerminalKey.enter)
+                        try answer(TerminalKey.enter, on: session)
                     case .password:
                         throw CleanJobError.passwordRequested
                     }
@@ -270,6 +271,12 @@ public struct CleanJob: MoleJob {
             exitCode: exitCode ?? -1,
             log: transcript
         )
+    }
+
+    /// Sends one key. If Mole has already exited, `send` throws `processFailed`; that is not an error here,
+    /// because the next poll of `waitForExit` returns the real exit code and decides whether the run was fine.
+    private func answer(_ key: String, on session: InteractiveSession) throws {
+        do { try session.send(key) } catch BurrowError.processFailed { }
     }
 
     static func status(from line: String) -> String? {

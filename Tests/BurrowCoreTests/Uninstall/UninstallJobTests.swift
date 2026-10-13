@@ -255,6 +255,51 @@ final class UninstallJobTests: XCTestCase {
         XCTAssertTrue(session.terminated)
     }
 
+    func testPreviewArgumentsAlwaysContainDryRun() {
+        // previewLeftovers answers "y" to Mole's first prompt. That is only safe under --dry-run.
+        for name in ["Alpha", "Microsoft Word", "--odd", "a b"] {
+            XCTAssertTrue(UninstallJob.previewArguments(for: name).contains("--dry-run"), name)
+            XCTAssertEqual(UninstallJob.previewArguments(for: name).first, "uninstall")
+            XCTAssertFalse(UninstallJob.previewArguments(for: name).contains("--permanent"))
+        }
+    }
+
+    func testPreviewLeftoversReadsTheWholeListEvenWhenItScrollsOffTheScreen() async throws {
+        // A 40-row screen only shows the bottom of a long file list. The leftovers come from the transcript.
+        let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
+        let item = try XCTUnwrap(scan.allItems.first)
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "5.8MB")]))
+        let files = (1...80).map { "  ✓ ~/Library/Caches/com.example.alpha/file\($0) , \($0)KB" }
+        let full = "Files to be removed:\n\n◎ Alpha , 9MB\n  ✓ /Applications/Alpha.app , 5.8MB\n" + files.joined(separator: "\n")
+            + "\n\n➤ Remove 1 app, 9MB  Enter confirm, ESC cancel: "
+        session.onSend { s, keys in
+            guard keys == "y\r" else { return }
+            s.show(full, replace: false)
+            s.show(files.suffix(8).joined(separator: "\n") + "\n\n➤ Remove 1 app, 9MB  Enter confirm, ESC cancel: ")
+        }
+        let (job, _) = job(session: session)
+        let leftovers = try await job.previewLeftovers(for: item)
+        XCTAssertEqual(leftovers.count, 80)
+        XCTAssertEqual(leftovers.first, "~/Library/Caches/com.example.alpha/file1, 1KB")
+    }
+
+    func testPreviewLeftoversReportsMoleDyingAsAnError() async throws {
+        let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
+        let item = try XCTUnwrap(scan.allItems.first)
+        let session = UninstallFakeSession(frame: UninstallScreens.matched([("Alpha", "5.8MB")]))
+        session.onSend { s, keys in
+            if keys == "y\r" { s.show("Something went wrong\n"); s.exit(1) }
+        }
+        let (job, _) = job(session: session)
+        do {
+            _ = try await job.previewLeftovers(for: item)
+            XCTFail("expected processFailed")
+        } catch BurrowError.processFailed(let code, let output) {
+            XCTAssertEqual(code, 1)
+            XCTAssertTrue(output.contains("Something went wrong"))
+        }
+    }
+
     func testPreviewLeftoversDeclinesWhenMatchDiffers() async throws {
         let scan = scanResult([("Alpha", "5.8MB", 5_800_000)])
         let item = try XCTUnwrap(scan.allItems.first)

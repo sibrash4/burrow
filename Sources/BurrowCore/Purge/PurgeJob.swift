@@ -7,6 +7,8 @@ public struct PurgeJob: MoleJob {
     private let launcher: InteractiveLaunching
     private let driver: MoleMenuDriver
     private let home: String
+    /// What `run` launches. Tests swap in `--dry-run` for live checks; the app always uses the default.
+    var runArguments = ["purge"]
 
     public init(runner: CommandRunning, launcher: InteractiveLaunching,
                 driver: MoleMenuDriver = MoleMenuDriver(), home: String = NSHomeDirectory()) {
@@ -32,7 +34,7 @@ public struct PurgeJob: MoleJob {
     public func run(selection: Set<ScanItem.ID>, from scan: ScanResult) -> AsyncThrowingStream<JobEvent, Error> {
         let wanted = scan.allItems.filter { $0.selectable && selection.contains($0.id) }.map(\.id)
         let spec = MenuRunSpec(
-            args: ["purge"], label: "Removing build folders",
+            args: runArguments, label: "Removing build folders",
             checkConfirm: { PurgeParser.checkConfirm(screen: $0, wanted: wanted) },
             summarize: { PurgeParser.summarize(log: $0, exitCode: $1) })
         return MenuJobRun.stream(spec: spec, wanted: wanted, launcher: launcher, driver: driver,

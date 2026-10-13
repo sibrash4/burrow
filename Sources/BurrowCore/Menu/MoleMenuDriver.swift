@@ -9,6 +9,8 @@ public struct MenuEntry: Equatable, Sendable {
 public struct MenuSelectionReport: Equatable, Sendable {
     public var selectedKeys: [String]
     public var totalRows: Int
+    /// Mole's own header total for the final selection, e.g. "64.9MB".
+    public var selectedSize: String = ""
 }
 
 /// Drives Mole's interactive checklist (`mo installer`, `mo purge`) one key at a time.
@@ -18,10 +20,16 @@ public struct MenuSelectionReport: Equatable, Sendable {
 public struct MoleMenuDriver: Sendable {
     public var firstFrameTimeout: TimeInterval
     public var frameTimeout: TimeInterval
+    /// How long the purge screen must stay unchanged before a row is identified from it.
+    /// Mole redraws in place, rows first and the "Path:" line a few milliseconds later, and the key hints at
+    /// the bottom never leave the screen, so "footer visible" does not mean "redraw finished". Seen live:
+    /// the new cursor row next to the previous row's Path. Zero turns this off (fake sessions in tests).
+    public var settleTime: TimeInterval
 
-    public init(firstFrameTimeout: TimeInterval = 180, frameTimeout: TimeInterval = 8) {
+    public init(firstFrameTimeout: TimeInterval = 180, frameTimeout: TimeInterval = 8, settleTime: TimeInterval = 0.15) {
         self.firstFrameTimeout = firstFrameTimeout
         self.frameTimeout = frameTimeout
+        self.settleTime = settleTime
     }
 
     /// Makes exactly `wanted` selected, checks it twice, then presses Enter.
@@ -85,10 +93,12 @@ public struct MoleMenuDriver: Sendable {
         // Second pass, bottom to top: read every row again and compare with what was asked.
         var selected: [String] = []
         var finalCount = frame.header.selectedCount
+        var finalSize = frame.header.selectedSize
         for index in stride(from: total - 1, through: 0, by: -1) {
             let e = try entry(of: frame)
             if e.row.isSelected { selected.append(e.key) }
             finalCount = frame.header.selectedCount
+            finalSize = frame.header.selectedSize
             if index > 0 { frame = try await move(.up, to: index - 1, in: session) }
         }
 
@@ -97,7 +107,7 @@ public struct MoleMenuDriver: Sendable {
                 expected: "\(wanted.count): \(describe(wanted))",
                 actual: "\(finalCount) counted, \(selected.count) ticked: \(describe(selected))")
         }
-        return MenuSelectionReport(selectedKeys: selected.reversed(), totalRows: total)
+        return MenuSelectionReport(selectedKeys: selected.reversed(), totalRows: total, selectedSize: finalSize)
     }
 
     private func toggle(at index: Int, want: Bool, from frame: MenuFrame, in session: InteractiveSession) async throws -> MenuFrame {
@@ -139,12 +149,30 @@ public struct MoleMenuDriver: Sendable {
 
     private func waitMenu(_ session: InteractiveSession, timeout: TimeInterval,
                           where extra: @escaping @Sendable (MenuFrame) -> Bool) async throws -> MenuFrame {
-        let text = try await session.waitForFrame(timeout: timeout) { text in
-            guard let frame = MenuFrame.parse(text), frame.isComplete else { return false }
-            return extra(frame)
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let text = try await session.waitForFrame(timeout: max(0.05, deadline.timeIntervalSinceNow)) { text in
+                guard let frame = MenuFrame.parse(text), frame.isComplete else { return false }
+                return extra(frame)
+            }
+            guard var frame = MenuFrame.parse(text) else { throw BurrowError.parseFailed("menu frame") }
+            guard frame.kind == .purge, settleTime > 0 else { return frame }
+
+            // Purge identifies rows by the "Path:" line, which can lag the cursor. Wait for a quiet screen.
+            var latest = text
+            var quietSince = Date()
+            while Date().timeIntervalSince(quietSince) < settleTime {
+                do { try await Task.sleep(nanoseconds: 30_000_000) } catch { throw BurrowError.cancelled }
+                let now = session.currentFrame()
+                if now != latest { latest = now; quietSince = Date() }
+            }
+            if latest != text {
+                guard let settled = MenuFrame.parse(latest) else { throw BurrowError.parseFailed("menu frame") }
+                frame = settled
+            }
+            if frame.isComplete, extra(frame) { return frame }
+            guard Date() < deadline else { throw BurrowError.timeout("waiting for Mole's menu to settle") }
         }
-        guard let frame = MenuFrame.parse(text) else { throw BurrowError.parseFailed("menu frame") }
-        return frame
     }
 
     private func describe(_ keys: some Collection<String>) -> String {

@@ -40,7 +40,7 @@ final class CleanJobTests: TempDirTestCase {
         let scan = try await job.scan()
 
         XCTAssertEqual(mole.calls, [["clean", "--dry-run"]])
-        XCTAssertEqual(mole.environments[0]["MOLE_TEST_NO_AUTH"], "1")
+        XCTAssertNil(mole.environments[0]["MOLE_TEST_NO_AUTH"])
         XCTAssertEqual(mole.environments[0]["NO_COLOR"], "1")
         XCTAssertEqual(scan.kind, .clean)
         XCTAssertEqual(scan.reportedTotalBytes, 9_510_000_000)
@@ -130,7 +130,7 @@ final class CleanJobTests: TempDirTestCase {
         XCTAssertFalse(backupExists)
         XCTAssertEqual(mole.calls.count, 2, "scan, then one verification preview")
         XCTAssertEqual(launcher.launches, [["clean"]])
-        XCTAssertEqual(launcher.environments[0]["MOLE_TEST_NO_AUTH"], "1")
+        XCTAssertTrue(launcher.environments[0].keys.allSatisfy { !$0.hasPrefix("MOLE_TEST_") })
         XCTAssertTrue(events.statuses.contains("Checking your selection"))
     }
 
@@ -245,6 +245,39 @@ final class CleanJobTests: TempDirTestCase {
 
         XCTAssertEqual(session.sent, [" "])
         XCTAssertTrue(events.lines.contains { $0.contains("skipping") })
+    }
+
+    func testNoMoleTestHooksReachAnyMoleCall() async throws {
+        // MOLE_TEST_* are Mole's internal test switches. Not in the preview, the verification preview or the run.
+        let (job, mole, launcher) = try setUpJob(whitelistContent: original)
+        let scan = try await job.scan()
+        let chosen = try selection(scan, without: ["Claude logs"])
+        _ = try await collectEvents(job.run(selection: chosen, from: scan))
+
+        XCTAssertEqual(mole.environments.count, 2, "scan and verification preview")
+        XCTAssertEqual(launcher.environments.count, 1)
+        for environment in mole.environments + launcher.environments {
+            XCTAssertTrue(environment.keys.allSatisfy { !$0.hasPrefix("MOLE_TEST_") }, "\(environment)")
+        }
+    }
+
+    func testMoleExitingJustBeforeTheAnswerIsNotAnError() async throws {
+        // Real PTYSession.send throws processFailed once Mole has exited. The exit code decides, not the failed write.
+        let session = FakeSession(chunks: ["\nClean Your Mac\n\n➤ System caches need sudo. Enter continue, Space skip: "])
+        session.exitsBeforeSend = true
+        let (job, _, _) = try setUpJob(session: session)
+        let scan = try await job.scan()
+        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+        XCTAssertEqual(try XCTUnwrap(events.result).exitCode, 0)
+        XCTAssertTrue(session.sent.isEmpty)
+    }
+
+    func testNonZeroExitIsReportedInTheResultNotThrown() async throws {
+        let session = FakeSession(chunks: CleanTranscripts.skipSudoThenFinish, exitCode: 1)
+        let (job, _, _) = try setUpJob(session: session)
+        let scan = try await job.scan()
+        let events = try await collectEvents(job.run(selection: scan.defaultSelection, from: scan))
+        XCTAssertEqual(try XCTUnwrap(events.result).exitCode, 1, "the app turns a non-zero exit into a failure")
     }
 
     func testFirstTimeSetupPromptGetsEnter() async throws {
